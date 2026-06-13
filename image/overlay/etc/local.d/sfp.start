@@ -22,6 +22,9 @@ cat <<'HELP'
 
   Backups are written to the current directory (or /tmp). A cold power-cycle
   is required after a successful write. See: sfp-unlock --help
+
+  Need the network (e.g. to copy a backup off)? Run:
+    setup-interfaces && rc-service networking restart
   ============================================================
 
 HELP

@@ -41,6 +41,14 @@ ethtool
 pciutils
 EOF
 
+# Loopback only, so the networking service starts cleanly. The unlock works
+# offline; for DHCP run 'setup-interfaces' then 'rc-service networking restart'.
+mkdir -p "$tmp/etc/network"
+makefile root:root 0644 "$tmp/etc/network/interfaces" <<EOF
+auto lo
+iface lo inet loopback
+EOF
+
 # The unlock tool.
 mkdir -p "$tmp/usr/local/sbin"
 install -m 0755 "$SFP_BIN" "$tmp/usr/local/sbin/sfp-unlock"
