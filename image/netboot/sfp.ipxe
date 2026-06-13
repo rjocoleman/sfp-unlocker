@@ -1,0 +1,13 @@
+#!ipxe
+# Boot the SFP unlocker live environment over the network (iPXE).
+# build-pxe.sh writes a filled-in copy to dist/pxe/sfp.ipxe; serve that and the
+# vmlinuz-lts / initramfs-lts / modloop-lts / *.apkovl.tar.gz next to it over HTTP.
+#
+# Set ${base} to the directory URL that holds these files.
+
+set base http://CHANGE-ME/sfp
+set branch v3.21
+
+kernel ${base}/vmlinuz-lts initrd=initramfs-lts modules=loop,squashfs,sd-mod,usb-storage quiet console=tty0 console=ttyS0,115200 alpine_repo=https://dl-cdn.alpinelinux.org/alpine/${branch}/main modloop=${base}/modloop-lts apkovl=${base}/sfp-unlocker.apkovl.tar.gz
+initrd ${base}/initramfs-lts
+boot

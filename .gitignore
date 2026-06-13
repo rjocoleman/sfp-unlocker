@@ -1,0 +1,4 @@
+/dist/
+*.bin
+*.iso
+.sfp-write-test

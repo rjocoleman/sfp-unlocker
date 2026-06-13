@@ -1,0 +1,4 @@
+# shellcheck project config
+external-sources=true
+# Allow sourcing files shellcheck can't follow at lint time.
+disable=SC1091

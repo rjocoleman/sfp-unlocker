@@ -1,0 +1,58 @@
+[tools]
+shellcheck = "0.11.0"
+shfmt = "3.13.1"
+bats = "1.11.0"
+lefthook = "1.13.6"
+
+[env]
+ISO_OUT = "dist/sfp-unlocker.iso"
+
+[settings]
+# Files shellcheck/shfmt should process. .bats files are excluded: they use bats
+# DSL (@test "..." { ... }) which is not valid sh/bash and neither tool parses it.
+
+[tasks.fmt]
+description = "Format shell scripts in place"
+run = "shfmt -w bin/sfp-unlock test/helpers.bash image/*.sh image/overlay/etc/local.d/sfp.start"
+
+[tasks.fmt-check]
+description = "Check shell formatting (CI gate)"
+run = "shfmt -d bin/sfp-unlock test/helpers.bash image/*.sh image/overlay/etc/local.d/sfp.start"
+sources = ["bin/sfp-unlock", "test/helpers.bash", "image/**/*.sh", "image/overlay/etc/local.d/sfp.start"]
+
+[tasks.shellcheck]
+description = "Static analysis of shell scripts"
+run = "shellcheck -x bin/sfp-unlock test/helpers.bash image/*.sh image/overlay/etc/local.d/sfp.start"
+sources = ["bin/sfp-unlock", "test/helpers.bash", "image/**/*.sh", "image/overlay/etc/local.d/sfp.start"]
+
+[tasks.lint]
+description = "Run all linters"
+depends = ["fmt-check", "shellcheck"]
+run = "echo 'lint ok'"
+
+[tasks.test]
+description = "Run the bats test suite (no hardware)"
+run = "bats --print-output-on-failure test/"
+sources = ["bin/sfp-unlock", "test/**/*"]
+
+[tasks.hooks]
+description = "Install git hooks via lefthook"
+run = "lefthook install"
+
+[tasks.build]
+description = "Build the bootable ISO (needs Docker)"
+depends = ["lint"]
+run = "image/build-iso.sh \"$ISO_OUT\""
+sources = ["bin/sfp-unlock", "image/**/*"]
+outputs = ["dist/sfp-unlocker.iso"]
+
+[tasks.build-pxe]
+description = "Build netboot.xyz/iPXE artefacts (needs Docker)"
+depends = ["lint"]
+run = "image/build-pxe.sh dist/pxe"
+sources = ["bin/sfp-unlock", "image/**/*"]
+
+[tasks.ci]
+description = "Everything CI runs (lint + test)"
+depends = ["lint", "test"]
+run = "echo 'ci ok'"

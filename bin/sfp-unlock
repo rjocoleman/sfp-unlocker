@@ -1,0 +1,414 @@
+#!/bin/sh
+# sfp-unlock - unlock non-Intel SFP/SFP+ modules on Intel ixgbe NICs.
+#
+# Flips the IXGBE_DEVICE_CAPS "allow any SFP" bit (EEPROM byte 0x58, bit 0) via
+# ethtool. Dry-run by default; writing needs --commit. Backs up the EEPROM first,
+# verifies the write, and refuses cards it doesn't recognise.
+#
+# POSIX sh on purpose: runs on busybox ash (Alpine live) and bash (Debian/Proxmox)
+# with no extra deps beyond ethtool and either /sys or lspci.
+#
+# License: MIT. No warranty. Flashing NIC firmware can brick hardware - read docs/.
+
+set -eu
+
+PROG=sfp-unlock
+VERSION=0.1.0
+
+# EEPROM location of the ixgbe device-capabilities byte (kernel IXGBE_DEVICE_CAPS
+# word 0x2C; ethtool addresses bytes, so 0x2C * 2 = 0x58). Bit 0 = ALLOW_ANY_SFP.
+SFP_OFFSET=0x58
+SFP_BIT=0x01
+
+# Root of the network sysfs tree. Overridable so the test suite can point at a
+# fake tree; in production it is always the real /sys.
+SYSFS_NET="${SFP_SYSFS_NET:-/sys/class/net}"
+
+INTEL_VENDOR=0x8086
+
+# ixgbe device IDs confirmed relevant to the SFP unlock. The offset is a kernel
+# family-wide constant, so this list is a caution gate, not a hard requirement;
+# --force-unknown bypasses it for other ixgbe IDs.
+#   82599 / X520 : 10fb 154d 1557 10f8
+#   X540         : 1528
+#   X550 / X55x  : 1563 15ab 15c8 15ce
+IXGBE_ALLOWLIST="0x10fb 0x154d 0x1557 0x10f8 0x1528 0x1563 0x15ab 0x15c8 0x15ce"
+
+# ---------------------------------------------------------------------------
+# output helpers
+# ---------------------------------------------------------------------------
+
+if [ -t 2 ] && [ "${NO_COLOR:-}" = "" ]; then
+	C_RED=$(printf '\033[31m')
+	C_YEL=$(printf '\033[33m')
+	C_GRN=$(printf '\033[32m')
+	C_OFF=$(printf '\033[0m')
+else
+	C_RED='' C_YEL='' C_GRN='' C_OFF=''
+fi
+
+info() { printf '%s\n' "$*" >&2; }
+warn() { printf '%s%s%s\n' "$C_YEL" "$*" "$C_OFF" >&2; }
+ok() { printf '%s%s%s\n' "$C_GRN" "$*" "$C_OFF" >&2; }
+err() { printf '%s%s%s\n' "$C_RED" "$*" "$C_OFF" >&2; }
+
+die() {
+	err "error: $*"
+	exit 1
+}
+
+usage() {
+	cat <<EOF
+$PROG $VERSION - unlock non-Intel SFP modules on Intel ixgbe NICs
+
+Usage:
+  $PROG --list                 detect Intel NICs and show lock status
+  $PROG <iface>                dry-run: show what would change (writes nothing)
+  $PROG <iface> --commit       back up, confirm, write, verify
+  $PROG <iface> --commit --yes non-interactive (still backs up and verifies)
+  $PROG <iface> --restore FILE write a saved EEPROM backup back to the card
+  $PROG --help | --version
+
+Options:
+  --commit          actually write the EEPROM (default is dry-run)
+  --yes             skip the typed confirmation prompt (implies non-interactive)
+  --restore FILE    restore a full EEPROM dump previously taken by this tool
+  --backup-dir DIR  where to write EEPROM backups (default: \$PWD, else /tmp)
+  --force-unknown   allow an ixgbe device ID not in the built-in allow-list
+  --no-color        disable coloured output
+
+Safety: dry-run by default, mandatory verified backup before any write, refuses
+unknown silicon, idempotent, reads back to confirm. A cold power-cycle is needed
+for the change to take effect. See docs/runbook.md and docs/recovery.md.
+
+Exit codes: 0 ok/no-op  1 error  2 usage  3 unsupported card
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# pure helpers (unit-tested via bats)
+# ---------------------------------------------------------------------------
+
+# compute_magic VENDOR DEVICE -> ethtool magic (deviceID<<16 | vendorID)
+# e.g. compute_magic 0x8086 0x10fb -> 0x10fb8086
+compute_magic() {
+	printf '0x%04x%04x' "$(($2))" "$(($1))"
+}
+
+# parse_byte: read ethtool -e output on stdin, print the first data byte (lower hex)
+# ethtool prints lines like "0x0058:        fc"
+parse_byte() {
+	awk 'tolower($1) ~ /^0x[0-9a-f]+:$/ { print tolower($2); exit }'
+}
+
+# desired_value HEXBYTE -> HEXBYTE with SFP_BIT set (read-modify-write, no hardcode)
+desired_value() {
+	printf '%02x' "$((0x$1 | SFP_BIT))"
+}
+
+# is_unlocked HEXBYTE -> exit 0 if SFP_BIT already set
+is_unlocked() {
+	[ "$((0x$1 & SFP_BIT))" -ne 0 ]
+}
+
+# classify_card DRIVER VENDOR DEVICE [--force-unknown]
+# prints a human label on stdout; return: 0 patchable, 3 unsupported, 4 no-lock
+classify_card() {
+	_drv=$1
+	_ven=$2
+	_dev=$3
+	_force=${4:-}
+
+	if [ "$_ven" != "$INTEL_VENDOR" ]; then
+		printf 'non-Intel device (vendor %s)\n' "$_ven"
+		return 3
+	fi
+
+	case "$_drv" in
+	ixgbe)
+		for _id in $IXGBE_ALLOWLIST; do
+			if [ "$_id" = "$_dev" ]; then
+				printf 'Intel ixgbe %s (supported)\n' "$_dev"
+				return 0
+			fi
+		done
+		if [ "$_force" = "--force-unknown" ]; then
+			printf 'Intel ixgbe %s (unlisted, forced)\n' "$_dev"
+			return 0
+		fi
+		printf 'Intel ixgbe %s (unlisted - use --force-unknown to override)\n' "$_dev"
+		return 3
+		;;
+	igb)
+		printf 'Intel igb %s (no SFP lock on this family)\n' "$_dev"
+		return 4
+		;;
+	i40e)
+		printf 'Intel i40e %s (NVM-locked, not supported - see xl710-unlocker)\n' "$_dev"
+		return 3
+		;;
+	*)
+		printf 'Intel %s driver=%s (unsupported)\n' "$_dev" "${_drv:-none}"
+		return 3
+		;;
+	esac
+}
+
+# ---------------------------------------------------------------------------
+# sysfs / hardware access
+# ---------------------------------------------------------------------------
+
+iface_attr() {
+	# iface_attr IFACE ATTR  (vendor|device|...) - print sysfs value or empty
+	_p="$SYSFS_NET/$1/device/$2"
+	if [ -r "$_p" ]; then
+		cat "$_p" 2>/dev/null || true
+	fi
+}
+
+iface_driver() {
+	# basename of /sys/class/net/IFACE/device/driver symlink
+	_l="$SYSFS_NET/$1/device/driver"
+	[ -L "$_l" ] || return 0
+	_t=$(readlink "$_l" 2>/dev/null) || return 0
+	printf '%s' "${_t##*/}"
+}
+
+list_intel_ifaces() {
+	for _d in "$SYSFS_NET"/*; do
+		[ -e "$_d/device/vendor" ] || continue
+		_i=${_d##*/}
+		[ "$_i" = lo ] && continue
+		_v=$(cat "$_d/device/vendor" 2>/dev/null || true)
+		[ "$_v" = "$INTEL_VENDOR" ] || continue
+		printf '%s\n' "$_i"
+	done
+}
+
+read_eeprom_byte() {
+	# read_eeprom_byte IFACE OFFSET -> hex byte
+	ethtool -e "$1" offset "$2" length 1 2>/dev/null | parse_byte
+}
+
+# ---------------------------------------------------------------------------
+# commands
+# ---------------------------------------------------------------------------
+
+cmd_list() {
+	_any=0
+	for _i in $(list_intel_ifaces); do
+		_any=1
+		_drv=$(iface_driver "$_i")
+		_ven=$(iface_attr "$_i" vendor)
+		_dev=$(iface_attr "$_i" device)
+		_label=$(classify_card "$_drv" "$_ven" "$_dev") || true
+		_status='?'
+		if [ "$(id -u)" -eq 0 ] && [ "$_drv" = ixgbe ]; then
+			_b=$(read_eeprom_byte "$_i" "$SFP_OFFSET" || true)
+			if [ -n "$_b" ]; then
+				if is_unlocked "$_b"; then _status="unlocked (0x$_b)"; else _status="locked (0x$_b)"; fi
+			fi
+		elif [ "$(id -u)" -ne 0 ]; then
+			_status='need root'
+		fi
+		printf '%-12s %-48s %s\n' "$_i" "$_label" "$_status"
+	done
+	[ "$_any" = 1 ] || info "no Intel NICs found"
+}
+
+validate_dump() {
+	# validate_dump FILE - non-empty and not all-identical bytes
+	[ -s "$1" ] || die "backup dump is empty: $1"
+	_distinct=$(od -An -v -tx1 "$1" | tr ' ' '\n' | sort -u | grep -c '[0-9a-f]') || _distinct=0
+	[ "$_distinct" -gt 1 ] || die "backup dump looks bogus (all identical bytes): $1"
+}
+
+cmd_restore() {
+	_iface=$1
+	_file=$2
+	[ -r "$_file" ] || die "restore file not readable: $_file"
+	validate_dump "$_file"
+	_ven=$(iface_attr "$_iface" vendor)
+	_dev=$(iface_attr "$_iface" device)
+	[ -n "$_dev" ] || die "$_iface is not a PCI NIC"
+	_magic=$(compute_magic "$_ven" "$_dev")
+	warn "About to RESTORE $_file to $_iface (magic $_magic). This overwrites the EEPROM."
+	confirm_or_die
+	ethtool -E "$_iface" magic "$_magic" <"$_file" || die "restore failed"
+	ok "restored $_iface from $_file - cold power-cycle the host to apply"
+}
+
+confirm_or_die() {
+	[ "${ASSUME_YES:-0}" = 1 ] && return 0
+	printf '%sType "yes" to proceed: %s' "$C_YEL" "$C_OFF" >&2
+	read -r _ans || _ans=
+	[ "$_ans" = yes ] || die "aborted by user"
+}
+
+backup_eeprom() {
+	# backup_eeprom IFACE -> path written to stdout; logs go to stderr
+	_iface=$1
+	_dir=${BACKUP_DIR:-}
+	if [ -z "$_dir" ]; then
+		if : >./.sfp-write-test 2>/dev/null; then
+			rm -f ./.sfp-write-test
+			_dir=$PWD
+		else
+			_dir=/tmp
+		fi
+	fi
+	mkdir -p "$_dir" 2>/dev/null || true
+	_mac=$(cat "$SYSFS_NET/$_iface/address" 2>/dev/null || echo unknown)
+	_mac=$(printf '%s' "$_mac" | tr ':' '-')
+	_stamp=$(date -u +%Y%m%dT%H%M%SZ 2>/dev/null || echo nodate)
+	_out="$_dir/eeprom-$_iface-$_mac-$_stamp.bin"
+	ethtool -e "$_iface" raw on >"$_out" 2>/dev/null || die "EEPROM backup failed (need root?)"
+	validate_dump "$_out"
+	_sha=$(sha256sum "$_out" 2>/dev/null | cut -d' ' -f1 || echo unavailable)
+	info "backup: $_out"
+	info "sha256: $_sha"
+	printf '%s' "$_out"
+}
+
+cmd_unlock() {
+	_iface=$1
+	[ -e "$SYSFS_NET/$_iface" ] || die "no such interface: $_iface"
+
+	_drv=$(iface_driver "$_iface")
+	_ven=$(iface_attr "$_iface" vendor)
+	_dev=$(iface_attr "$_iface" device)
+	[ -n "$_dev" ] || die "$_iface has no PCI device info (not a NIC?)"
+
+	_force=''
+	[ "${FORCE_UNKNOWN:-0}" = 1 ] && _force=--force-unknown
+	_rc=0
+	_label=$(classify_card "$_drv" "$_ven" "$_dev" "$_force") || _rc=$?
+	info "device: $_iface - $_label"
+
+	case "$_rc" in
+	4)
+		ok "nothing to do (no SFP lock on this family)"
+		exit 0
+		;;
+	3)
+		err "refusing to write: unsupported or unrecognised card"
+		exit 3
+		;;
+	esac
+
+	[ "$(id -u)" -eq 0 ] || die "must run as root to read/write the EEPROM"
+
+	_cur=$(read_eeprom_byte "$_iface" "$SFP_OFFSET" || true)
+	[ -n "$_cur" ] || die "could not read EEPROM byte $SFP_OFFSET on $_iface"
+
+	if is_unlocked "$_cur"; then
+		ok "already unlocked ($SFP_OFFSET = 0x$_cur, bit 0 set) - nothing to do"
+		exit 0
+	fi
+
+	_new=$(desired_value "$_cur")
+	_magic=$(compute_magic "$_ven" "$_dev")
+
+	info "plan: offset $SFP_OFFSET  0x$_cur -> 0x$_new  (magic $_magic)"
+
+	if [ "${DO_COMMIT:-0}" != 1 ]; then
+		warn "dry-run (no changes). Re-run with --commit to write:"
+		printf '  ethtool -E %s magic %s offset %s value 0x%s length 1\n' \
+			"$_iface" "$_magic" "$SFP_OFFSET" "$_new" >&2
+		exit 0
+	fi
+
+	_backup=$(backup_eeprom "$_iface")
+	# shellcheck disable=SC2064  # expand $_backup now for the trap message
+	trap "err 'failed after backup - restore with: $PROG $_iface --restore $_backup'" EXIT
+
+	warn "About to write $SFP_OFFSET = 0x$_new on $_iface (was 0x$_cur)."
+	confirm_or_die
+
+	ethtool -E "$_iface" magic "$_magic" offset "$SFP_OFFSET" value "0x$_new" length 1 ||
+		die "EEPROM write failed"
+
+	_check=$(read_eeprom_byte "$_iface" "$SFP_OFFSET" || true)
+	trap - EXIT
+	if [ -n "$_check" ] && is_unlocked "$_check"; then
+		ok "verified: $SFP_OFFSET = 0x$_check (bit 0 set). Backup: $_backup"
+		warn "cold power-cycle the host (full power off, not warm reboot) to apply."
+		exit 0
+	fi
+	die "verify failed (read back 0x${_check:-??}). Restore with: $PROG $_iface --restore $_backup"
+}
+
+# ---------------------------------------------------------------------------
+# argument parsing / main
+# ---------------------------------------------------------------------------
+
+main() {
+	IFACE=''
+	DO_LIST=0
+	DO_COMMIT=0
+	ASSUME_YES=0
+	FORCE_UNKNOWN=0
+	RESTORE_FILE=''
+	BACKUP_DIR=''
+
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		--list) DO_LIST=1 ;;
+		--commit) DO_COMMIT=1 ;;
+		--yes | -y) ASSUME_YES=1 ;;
+		--force-unknown) FORCE_UNKNOWN=1 ;;
+		--restore)
+			shift
+			[ $# -gt 0 ] || die "--restore needs a FILE"
+			RESTORE_FILE=$1
+			;;
+		--backup-dir)
+			shift
+			[ $# -gt 0 ] || die "--backup-dir needs a DIR"
+			BACKUP_DIR=$1
+			;;
+		--no-color) C_RED='' C_YEL='' C_GRN='' C_OFF='' ;;
+		-h | --help)
+			usage
+			exit 0
+			;;
+		-V | --version)
+			printf '%s %s\n' "$PROG" "$VERSION"
+			exit 0
+			;;
+		--)
+			shift
+			break
+			;;
+		-*) die "unknown option: $1 (try --help)" ;;
+		*)
+			[ -z "$IFACE" ] || die "unexpected argument: $1"
+			IFACE=$1
+			;;
+		esac
+		shift
+	done
+
+	export DO_COMMIT ASSUME_YES FORCE_UNKNOWN BACKUP_DIR
+
+	if [ "$DO_LIST" = 1 ]; then
+		cmd_list
+		exit 0
+	fi
+
+	[ -n "$IFACE" ] || {
+		usage
+		exit 2
+	}
+
+	if [ -n "$RESTORE_FILE" ]; then
+		[ "$(id -u)" -eq 0 ] || die "must run as root to restore the EEPROM"
+		cmd_restore "$IFACE" "$RESTORE_FILE"
+		exit 0
+	fi
+
+	cmd_unlock "$IFACE"
+}
+
+# Allow tests to source this file without executing main.
+[ "${SFP_UNLOCK_SOURCED:-0}" = 1 ] || main "$@"
