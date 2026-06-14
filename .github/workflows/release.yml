@@ -31,6 +31,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      - name: Stamp tool version from tag
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -eu
+          # Strip the leading "v" (v1.1.3 -> 1.1.3) and bake it in before the
+          # image builds copy the script, so the shipped binary matches the tag.
+          sed -i "s/^VERSION=.*/VERSION=${VERSION#v}/" bin/sfp-unlock
+          grep -n '^VERSION=' bin/sfp-unlock
+
       - run: mise run build # live-build: ISO + PXE (kernel/initrd/squashfs)
       - run: mise run build-img # mini mount-and-run tools image
 

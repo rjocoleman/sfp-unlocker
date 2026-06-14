@@ -5,15 +5,18 @@
 # ethtool. Dry-run by default; writing needs --commit. Backs up the EEPROM first,
 # verifies the write, and refuses cards it doesn't recognise.
 #
-# POSIX sh on purpose: runs on busybox ash (Alpine live) and bash (Debian/Proxmox)
-# with no extra deps beyond ethtool and either /sys or lspci.
+# POSIX sh on purpose: no bashisms, so it runs the same under dash (the live
+# image's /bin/sh), busybox ash (rescue media), or bash (Debian/Proxmox), with no
+# extra deps beyond ethtool and either /sys or lspci.
 #
 # License: MIT. No warranty. Flashing NIC firmware can brick hardware - read docs/.
 
 set -eu
 
 PROG=sfp-unlock
-VERSION=0.1.0
+# Bumped per release; the release workflow also stamps this from the git tag so
+# the shipped binary and the tag never drift.
+VERSION=1.1.3
 
 # EEPROM location of the ixgbe device-capabilities byte (kernel IXGBE_DEVICE_CAPS
 # word 0x2C; ethtool addresses bytes, so 0x2C * 2 = 0x58). Bit 0 = ALLOW_ANY_SFP.
