@@ -30,23 +30,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - run: mise run build
-      - run: mise run build-pxe
-        env:
-          SFP_VERSION: ${{ github.ref_name }}
-      - run: mise run build-img
+      - run: mise run build # live-build: ISO + PXE (kernel/initrd/squashfs)
+      - run: mise run build-img # mini mount-and-run tools image
 
       - name: Stage release assets
+        env:
+          VERSION: ${{ github.ref_name }}
         run: |
           set -eu
           mkdir -p release
           cp dist/sfp-unlocker.iso release/
           cp dist/sfp-unlocker-tools.img release/
-          # PXE files individually so iPXE's releases/latest/download URLs resolve.
-          cp dist/pxe/vmlinuz-lts dist/pxe/initramfs-lts dist/pxe/modloop-lts release/
-          cp dist/pxe/sfp-unlocker.apkovl.tar.gz release/
-          cp dist/pxe/sfp.ipxe dist/pxe/netboot.xyz-custom.ipxe release/
-          tar -czf release/sfp-unlocker-pxe.tar.gz -C dist/pxe .
+          # PXE files individually so the iPXE releases/latest/download URLs resolve.
+          cp dist/pxe/vmlinuz dist/pxe/initrd.img dist/pxe/filesystem.squashfs release/
+          sed "s/^set version .*/set version ${VERSION}/" image/netboot/sfp.ipxe >release/sfp.ipxe
+          cp image/netboot/netboot.xyz-custom.ipxe release/
           # Checksums (written to parent first so the file does not list itself).
           ( cd release && sha256sum -- * >../SHA256SUMS && mv ../SHA256SUMS . )
           ls -l release

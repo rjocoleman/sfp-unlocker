@@ -86,7 +86,7 @@ Cold power-cycle after a write. x86_64 only.
 Tips:
 
 - If the host is set to UEFI with Secure Boot, turn Secure Boot off for this maintenance
-  window (the Alpine ISO is not signed), or use SystemRescue (section 5) which is signed.
+  window (the ISO is not Secure-Boot signed), or use SystemRescue (section 5) which is signed.
 - iLO virtual media can be flaky: connect it before reset, and if it doesn't appear,
   unmount and remount once. The image runs from RAM, so a dropped media link mid-session
   won't kill it once booted.
@@ -121,14 +121,14 @@ Secure-Boot signed, which makes it the easy choice over a BMC.
 ## 6. Build and use the bootable ISO
 
 ```sh
-mise run build          # writes dist/sfp-unlocker.iso (needs Docker)
+mise run build          # writes dist/sfp-unlocker.iso + dist/pxe/ (needs Docker)
 ```
 
-The ISO is a minimal Alpine live image with `ethtool`, `pciutils` and `sfp-unlock`
-baked in. It is hybrid BIOS + UEFI so it boots both old (iLO4/iDRAC7-8, legacy BIOS)
-and new (iLO5/iDRAC9, UEFI) servers. It mirrors its console to serial (`ttyS0`,
-115200) so BMC text consoles work. It never flashes anything on its own - it only shows
-status and waits for you.
+The ISO is a minimal Debian live image (built with live-build) carrying `ethtool`,
+`pciutils` and `sfp-unlock`. It is hybrid BIOS + UEFI so it boots both old (iLO4/iDRAC7-8,
+legacy BIOS) and new (iLO5/iDRAC9, UEFI) servers, and it's USB-writable (`dd` it to a
+stick). It copies itself into RAM (`toram`), so the media can be released once booted, and
+it autologins to a root shell that lists your cards. It never flashes anything on its own.
 
 On Apple Silicon the build runs under amd64 emulation (slow but works). On x86_64 (CI,
 most Linux boxes) it's native and quick.
@@ -138,16 +138,17 @@ most Linux boxes) it's native and quick.
 ## 7. PXE / netboot.xyz
 
 ```sh
-mise run build          # ISO first
-mise run build-pxe      # writes dist/pxe/{vmlinuz-lts,initramfs-lts,modloop-lts,*.apkovl.tar.gz,sfp.ipxe}
+mise run build          # writes dist/pxe/{vmlinuz,initrd.img,filesystem.squashfs}
 ```
 
-The generated `sfp.ipxe` defaults `base` to the GitHub release download URL
-(`https://github.com/rjocoleman/sfp-unlocker/releases/latest/download`), so once a
-release exists you can point iPXE straight at it - no hosting needed.
+iPXE loads `vmlinuz` + `initrd.img`; live-boot then pulls `filesystem.squashfs` over HTTP
+into RAM (`toram`) and boots. The generated `sfp.ipxe` defaults `base` to the GitHub
+release download URL
+(`https://github.com/rjocoleman/sfp-unlocker/releases/latest/download`), so once a release
+exists you can point iPXE straight at it.
 
-1. To self-host instead, serve `dist/pxe/` over HTTP and set `base` in `sfp.ipxe` to that
-   URL.
+1. To self-host instead, serve the three files over HTTP and set `base` in `sfp.ipxe` to
+   that URL.
 2. Chain it from iPXE directly, or add the netboot.xyz entry: copy
    `image/netboot/netboot.xyz-custom.ipxe` into your netboot.xyz custom menu (it points
    `sfp_base` at the release by default).

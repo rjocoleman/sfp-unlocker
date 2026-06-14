@@ -5,26 +5,23 @@ bats = "1.11.0"
 lefthook = "1.13.6"
 zizmor = "1.25.2"
 
-[env]
-ISO_OUT = "dist/sfp-unlocker.iso"
-
 [settings]
-# Files shellcheck/shfmt should process. .bats files are excluded: they use bats
-# DSL (@test "..." { ... }) which is not valid sh/bash and neither tool parses it.
+# .bats files are excluded from shellcheck/shfmt: they use bats DSL
+# (@test "..." { ... }) which is not valid sh/bash and neither tool parses.
 
 [tasks.fmt]
 description = "Format shell scripts in place"
-run = "shfmt -w bin/sfp-unlock test/helpers.bash image/*.sh image/overlay/etc/local.d/sfp.start"
+run = "shfmt -w bin/sfp-unlock test/helpers.bash image/build-img.sh image/in-container-img.sh image/live/build-live.sh image/live/in-container-live.sh image/live/auto/config image/live/config/hooks/normal/0100-root-nopasswd.hook.chroot"
 
 [tasks.fmt-check]
 description = "Check shell formatting (CI gate)"
-run = "shfmt -d bin/sfp-unlock test/helpers.bash image/*.sh image/overlay/etc/local.d/sfp.start"
-sources = ["bin/sfp-unlock", "test/helpers.bash", "image/**/*.sh", "image/overlay/etc/local.d/sfp.start"]
+run = "shfmt -d bin/sfp-unlock test/helpers.bash image/build-img.sh image/in-container-img.sh image/live/build-live.sh image/live/in-container-live.sh image/live/auto/config image/live/config/hooks/normal/0100-root-nopasswd.hook.chroot"
+sources = ["bin/sfp-unlock", "test/helpers.bash", "image/**/*.sh", "image/live/auto/config", "image/live/config/hooks/normal/*.hook.chroot"]
 
 [tasks.shellcheck]
 description = "Static analysis of shell scripts"
-run = "shellcheck -x bin/sfp-unlock test/helpers.bash image/*.sh image/overlay/etc/local.d/sfp.start"
-sources = ["bin/sfp-unlock", "test/helpers.bash", "image/**/*.sh", "image/overlay/etc/local.d/sfp.start"]
+run = "shellcheck -x bin/sfp-unlock test/helpers.bash image/build-img.sh image/in-container-img.sh image/live/build-live.sh image/live/in-container-live.sh image/live/auto/config image/live/config/hooks/normal/0100-root-nopasswd.hook.chroot"
+sources = ["bin/sfp-unlock", "test/helpers.bash", "image/**/*.sh", "image/live/auto/config", "image/live/config/hooks/normal/*.hook.chroot"]
 
 [tasks.lint]
 description = "Run all linters"
@@ -46,17 +43,11 @@ description = "Install git hooks via lefthook"
 run = "lefthook install"
 
 [tasks.build]
-description = "Build the bootable ISO (needs Docker)"
+description = "Build the live ISO + PXE artefacts with live-build (needs Docker)"
 depends = ["lint"]
-run = "image/build-iso.sh \"$ISO_OUT\""
-sources = ["bin/sfp-unlock", "image/**/*"]
-outputs = ["dist/sfp-unlocker.iso"]
-
-[tasks.build-pxe]
-description = "Build netboot.xyz/iPXE artefacts (needs Docker)"
-depends = ["lint"]
-run = "image/build-pxe.sh dist/pxe"
-sources = ["bin/sfp-unlock", "image/**/*"]
+run = "image/live/build-live.sh"
+sources = ["bin/sfp-unlock", "image/live/**/*"]
+outputs = ["dist/sfp-unlocker.iso", "dist/pxe/filesystem.squashfs"]
 
 [tasks.build-img]
 description = "Build the mini non-bootable tools image (script + static ethtool, needs Docker)"

@@ -1,7 +1,5 @@
-#!/bin/sh
-# Runs at boot in the live image. Shows detected NICs and the exact command to
-# unlock - it deliberately does NOT flash anything automatically.
-
+# Shown once on the auto-login console. Lists detected cards and the command to
+# run - it never flashes anything by itself.
 cat <<'BANNER'
 
   ============================================================
@@ -20,11 +18,8 @@ cat <<'HELP'
     sfp-unlock eth0            # dry-run, shows what would change
     sfp-unlock eth0 --commit   # backs up, then writes after you confirm
 
-  Backups are written to the current directory (or /tmp). A cold power-cycle
-  is required after a successful write. See: sfp-unlock --help
-
-  Need the network (e.g. to copy a backup off)? Run:
-    setup-interfaces && rc-service networking restart
+  A cold power-cycle is required after a successful write.
+  See: sfp-unlock --help
   ============================================================
 
 HELP

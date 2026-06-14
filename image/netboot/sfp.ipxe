@@ -1,21 +1,17 @@
 #!ipxe
-# Boot Alpine over the network and apply our overlay. The kernel, initramfs and
-# modloop come straight from the Alpine CDN (the same source netboot.xyz uses);
-# only the small apkovl - which adds ethtool and sfp-unlock - is hosted with the
-# release. Override ${mirror} or ${apkovl} to host them yourself.
+# Boot the SFP unlocker (Debian live) over the network. iPXE loads the kernel and
+# initrd; live-boot then pulls the squashfs over HTTP into RAM (toram). Everything
+# the tool needs is in the squashfs, so nothing else is fetched and there is no
+# login. Override ${base} to host the files on your own HTTP server.
 
-set mirror http://dl-cdn.alpinelinux.org/alpine
-set branch v3.21
-set arch x86_64
-set dir ${branch}/releases/${arch}/netboot
-set apkovl https://github.com/rjocoleman/sfp-unlocker/releases/latest/download/sfp-unlocker.apkovl.tar.gz
+set base https://github.com/rjocoleman/sfp-unlocker/releases/latest/download
 set version dev
 
 echo
-echo sfp-unlocker ${version}
+echo sfp-unlocker ${version} - netboot from ${base}
 echo
 
 imgfree
-kernel ${mirror}/${dir}/vmlinuz-lts ip=dhcp edd=off nomodeset console=tty0 console=ttyS0,115200 alpine_repo=${mirror}/${branch}/main modules=loop,squashfs modloop=${mirror}/${dir}/modloop-lts apkovl=${apkovl}
-initrd ${mirror}/${dir}/initramfs-lts
+kernel ${base}/vmlinuz boot=live components toram ip=dhcp fetch=${base}/filesystem.squashfs console=tty0 console=ttyS0,115200
+initrd ${base}/initrd.img
 boot

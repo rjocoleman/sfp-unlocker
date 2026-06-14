@@ -1,0 +1,4 @@
+#!/bin/sh
+# Empty root password so the auto-login console comes straight up.
+set -e
+passwd -d root || true

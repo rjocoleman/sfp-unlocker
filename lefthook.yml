@@ -1,23 +1,17 @@
 # Git hooks. Install with: mise run hooks  (or: lefthook install)
-# Commands use the mise-managed shellcheck/shfmt/bats on PATH.
+# These call the mise tasks so the file lists live in one place (mise.toml) and
+# can't drift out of sync with the hooks.
 
 pre-commit:
   parallel: true
   commands:
-    shellcheck:
-      glob: "*.{sh,bash}"
-      run: shellcheck -x bin/sfp-unlock test/helpers.bash image/*.sh image/overlay/etc/local.d/sfp.start
-    shfmt:
-      glob: "*.{sh,bash}"
-      run: shfmt -d bin/sfp-unlock test/helpers.bash image/*.sh image/overlay/etc/local.d/sfp.start
-    bats:
-      glob: "{bin/sfp-unlock,test/**/*}"
-      run: bats test/
+    lint:
+      run: mise run lint
     zizmor:
       glob: ".github/workflows/*.{yml,yaml}"
-      run: zizmor --offline .github/workflows/
+      run: mise run zizmor
 
 pre-push:
   commands:
     test:
-      run: bats test/
+      run: mise run test

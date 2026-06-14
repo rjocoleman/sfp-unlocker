@@ -1,0 +1,21 @@
+#!/bin/sh
+# live-build configuration. Run via `lb config` (which executes this), then
+# `lb build`. Builds a hybrid ISO; the PXE files are pulled from binary/live/.
+set -e
+
+lb config noauto \
+	--distribution bookworm \
+	--architectures amd64 \
+	--binary-images iso-hybrid \
+	--archive-areas "main" \
+	--debootstrap-options "--variant=minbase" \
+	--firmware-chroot false \
+	--firmware-binary false \
+	--debian-installer none \
+	--memtest none \
+	--apt-indices false \
+	--apt-recommends false \
+	--zsync false \
+	--compression xz \
+	--bootappend-live "boot=live components toram console=tty0 console=ttyS0,115200" \
+	"${@}"

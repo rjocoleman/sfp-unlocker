@@ -100,19 +100,21 @@ command. See [docs/recovery.md](docs/recovery.md).
   `mount -o loop` an image file on the host. Run it against the *running* OS - no reboot,
   nothing to install. The read-only mount is fine: backups auto-fall-back to a writable
   dir. Build with `mise run build-img`.
-- **iLO / iDRAC virtual media (bootable):** boot the live ISO, it shows your cards and the
-  command to type. See [docs/runbook.md](docs/runbook.md).
-- **PXE / netboot.xyz:** `mise run build-pxe` produces kernel + initramfs + apkovl + an
-  iPXE script that pulls from the GitHub release. See the runbook.
-- **SystemRescue / Alpine:** any live Linux with `ethtool` works - copy `bin/sfp-unlock`
-  across and run it.
+- **iLO / iDRAC virtual media (bootable):** boot `sfp-unlocker.iso` (a Debian live image,
+  BIOS+UEFI). It RAM-boots to a root shell that lists your cards - no login. See
+  [docs/runbook.md](docs/runbook.md).
+- **PXE / netboot.xyz:** point iPXE at `sfp.ipxe`; it boots the same image over the network
+  (kernel + initrd, then the squashfs is pulled into RAM). See the runbook.
+- **SystemRescue / any live Linux:** any live Linux with `ethtool` works - copy
+  `bin/sfp-unlock` across and run it.
 
 ## Downloads
 
 Tagged releases publish the artefacts on the
 [releases page](https://github.com/rjocoleman/sfp-unlocker/releases): the bootable
-`sfp-unlocker.iso`, the mini `sfp-unlocker-tools.img`, the PXE files (and a
-`sfp-unlocker-pxe.tar.gz`), plus `SHA256SUMS`. The script itself is just
+`sfp-unlocker.iso` (BIOS+UEFI, also USB-writable), the PXE files (`vmlinuz`, `initrd.img`,
+`filesystem.squashfs`) plus `sfp.ipxe`/`netboot.xyz-custom.ipxe`, the mini
+`sfp-unlocker-tools.img`, and `SHA256SUMS`. The script itself is just
 [`bin/sfp-unlock`](bin/sfp-unlock) if you only want the one file.
 
 ## Unattended / scripted use
@@ -148,10 +150,13 @@ mise run lint       # shellcheck + shfmt
 mise run test       # bats - no hardware needed
 mise run zizmor     # security-scan the GitHub Actions workflows
 mise run ci         # lint + test + zizmor
-mise run build      # build the live ISO       (needs Docker)
-mise run build-pxe  # build the PXE artefacts  (needs Docker)
-mise run build-img  # build the mini tools img (needs Docker)
+mise run build      # build the live ISO + PXE files (live-build, needs Docker)
+mise run build-img  # build the mini tools img        (needs Docker)
 ```
+
+The bootable image is a minimal Debian live system built with
+[live-build](https://live-team.pages.debian.net/live-manual/) - one config produces the
+BIOS+UEFI ISO and the PXE kernel/initrd/squashfs. It RAM-boots (`toram`) and autologins.
 
 CI (GitHub Actions) runs lint, tests, zizmor, the pre-commit hooks, and the image
 builds on every push, with concurrency cancellation. Pushing a `v*` tag runs the
