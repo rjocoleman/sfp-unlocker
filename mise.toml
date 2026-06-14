@@ -3,6 +3,7 @@ shellcheck = "0.11.0"
 shfmt = "3.13.1"
 bats = "1.11.0"
 lefthook = "1.13.6"
+zizmor = "1.25.2"
 
 [env]
 ISO_OUT = "dist/sfp-unlocker.iso"
@@ -35,6 +36,11 @@ description = "Run the bats test suite (no hardware)"
 run = "bats --print-output-on-failure test/"
 sources = ["bin/sfp-unlock", "test/**/*"]
 
+[tasks.zizmor]
+description = "Security-scan the GitHub Actions workflows"
+run = "zizmor .github/workflows/"
+sources = [".github/workflows/*.yml", ".github/workflows/*.yaml"]
+
 [tasks.hooks]
 description = "Install git hooks via lefthook"
 run = "lefthook install"
@@ -60,6 +66,6 @@ sources = ["bin/sfp-unlock", "image/build-img.sh", "image/in-container-img.sh"]
 outputs = ["dist/sfp-unlocker-tools.img"]
 
 [tasks.ci]
-description = "Everything CI runs (lint + test)"
-depends = ["lint", "test"]
+description = "Everything CI runs (lint + test + zizmor)"
+depends = ["lint", "test", "zizmor"]
 run = "echo 'ci ok'"

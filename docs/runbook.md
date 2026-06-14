@@ -1,6 +1,6 @@
 # Runbook
 
-Six ways to run the unlock, from least to most setup. Pick one. All of them end the
+Seven ways to run the unlock, from least to most setup. Pick one. All of them end the
 same way: a dry-run, then `--commit`, then a **cold power-cycle**.
 
 Before you start:
@@ -34,7 +34,35 @@ one you target (e.g. `enp1s0f0`), not the bridge.
 
 ---
 
-## 2. HP iLO virtual media
+## 2. Mini tools image (attach + mount, no reboot)
+
+The lightest path that needs no reboot and nothing installed on the host. Build it once:
+
+```sh
+mise run build-img      # writes dist/sfp-unlocker-tools.img (needs Docker)
+```
+
+It is a small FAT image holding just `sfp-unlock` and a static `ethtool`. Attach it to
+the running host and mount it:
+
+- **iLO/iDRAC:** map `sfp-unlocker-tools.img` as virtual USB/removable media.
+- **Proxmox / any Linux:** `mount -o loop,ro sfp-unlocker-tools.img /mnt` (or the device,
+  e.g. `/dev/sdb`).
+
+Then run it against the live OS:
+
+```sh
+/mnt/sfp-unlock --list
+/mnt/sfp-unlock <iface>                               # dry-run
+/mnt/sfp-unlock <iface> --commit --backup-dir /root   # image is read-only, write the backup elsewhere
+```
+
+The script uses the `ethtool` next to it, so the host needs no packages. Cold
+power-cycle after a write. x86_64 only.
+
+---
+
+## 3. HP iLO virtual media
 
 1. iLO web UI -> Remote Console -> Virtual Media. Mount `dist/sfp-unlocker.iso` as a
    virtual CD/DVD (HTML5 console on iLO5, Java applet on older iLO4).
@@ -47,14 +75,14 @@ one you target (e.g. `enp1s0f0`), not the bridge.
 Tips:
 
 - If the host is set to UEFI with Secure Boot, turn Secure Boot off for this maintenance
-  window (the Alpine ISO is not signed), or use SystemRescue (section 4) which is signed.
+  window (the Alpine ISO is not signed), or use SystemRescue (section 5) which is signed.
 - iLO virtual media can be flaky: connect it before reset, and if it doesn't appear,
   unmount and remount once. The image runs from RAM, so a dropped media link mid-session
   won't kill it once booted.
 
 ---
 
-## 3. Dell iDRAC virtual media
+## 4. Dell iDRAC virtual media
 
 1. iDRAC -> Configuration -> Virtual Media (or the Virtual Console "Connect Virtual
    Media"). Map `dist/sfp-unlocker.iso`.
@@ -68,7 +96,7 @@ window, or use SystemRescue.
 
 ---
 
-## 4. SystemRescue or plain Alpine (no custom image)
+## 5. SystemRescue or plain Alpine (no custom image)
 
 Any live Linux with `ethtool` works. SystemRescue already has `ethtool` and is
 Secure-Boot signed, which makes it the easy choice over a BMC.
@@ -79,7 +107,7 @@ Secure-Boot signed, which makes it the easy choice over a BMC.
 
 ---
 
-## 5. Build and use the bootable ISO
+## 6. Build and use the bootable ISO
 
 ```sh
 mise run build          # writes dist/sfp-unlocker.iso (needs Docker)
@@ -96,23 +124,50 @@ most Linux boxes) it's native and quick.
 
 ---
 
-## 6. PXE / netboot.xyz
+## 7. PXE / netboot.xyz
 
 ```sh
 mise run build          # ISO first
 mise run build-pxe      # writes dist/pxe/{vmlinuz-lts,initramfs-lts,modloop-lts,*.apkovl.tar.gz,sfp.ipxe}
 ```
 
-1. Serve `dist/pxe/` over HTTP from somewhere your servers can reach.
-2. Edit `dist/pxe/sfp.ipxe` and set `base` to that URL.
-3. Chain it from iPXE directly, or add the netboot.xyz entry: copy
-   `image/netboot/netboot.xyz-custom.ipxe` into your netboot.xyz custom menu and point
-   `sfp_base` at the same URL.
+The generated `sfp.ipxe` defaults `base` to the GitHub release download URL
+(`https://github.com/rjocoleman/sfp-unlocker/releases/latest/download`), so once a
+release exists you can point iPXE straight at it - no hosting needed.
+
+1. To self-host instead, serve `dist/pxe/` over HTTP and set `base` in `sfp.ipxe` to that
+   URL.
+2. Chain it from iPXE directly, or add the netboot.xyz entry: copy
+   `image/netboot/netboot.xyz-custom.ipxe` into your netboot.xyz custom menu (it points
+   `sfp_base` at the release by default).
 
 From the netboot.xyz menu, pick "SFP unlocker (Intel ixgbe)". It boots the same live
 environment as the ISO.
 
 ---
+
+## Unattended / scripted
+
+For config management or a one-shot remote run, skip the prompt with `--yes`. The
+default (no `--commit`) is a read-only dry-run, so it is always safe to probe first.
+
+```sh
+sfp-unlock --list                                   # detect, read-only
+sfp-unlock eth0                                      # dry-run, read-only
+sfp-unlock eth0 --commit --yes --backup-dir /root   # backup + write + verify, no prompt
+sfp-unlock eth0 --restore /root/eeprom-eth0-*.bin --yes   # revert
+```
+
+Gate on exit codes: `0` ok or no-op (already unlocked, or igb has no lock), `1` error,
+`2` usage, `3` unsupported/unrecognised card. Example:
+
+```sh
+if sfp-unlock "$IFACE" --commit --yes --backup-dir /root; then
+  echo "unlocked (reboot pending)"
+else
+  rc=$?; echo "sfp-unlock failed rc=$rc"; exit "$rc"
+fi
+```
 
 ## After any method
 

@@ -58,12 +58,39 @@ command. See [docs/recovery.md](docs/recovery.md).
 
 ## Other ways to run it
 
-- **iLO / iDRAC virtual media:** boot the live ISO, it shows your cards and the command
-  to type. See [docs/runbook.md](docs/runbook.md).
+- **Mini tools image (no reboot):** `dist/sfp-unlocker-tools.img` is a tiny FAT image
+  holding just `sfp-unlock` and a static `ethtool`. Attach it via iLO/iDRAC virtual media
+  (or `mount -o loop` on the host), then run it against the *running* OS - no reboot, and
+  the host needs nothing installed. Build with `mise run build-img`.
+- **iLO / iDRAC virtual media (bootable):** boot the live ISO, it shows your cards and the
+  command to type. See [docs/runbook.md](docs/runbook.md).
 - **PXE / netboot.xyz:** `mise run build-pxe` produces kernel + initramfs + apkovl + an
-  iPXE script. See the runbook.
+  iPXE script that pulls from the GitHub release. See the runbook.
 - **SystemRescue / Alpine:** any live Linux with `ethtool` works - copy `bin/sfp-unlock`
   across and run it.
+
+## Downloads
+
+Tagged releases publish the artefacts on the
+[releases page](https://github.com/rjocoleman/sfp-unlocker/releases): the bootable
+`sfp-unlocker.iso`, the mini `sfp-unlocker-tools.img`, the PXE files (and a
+`sfp-unlocker-pxe.tar.gz`), plus `SHA256SUMS`. The script itself is just
+[`bin/sfp-unlock`](bin/sfp-unlock) if you only want the one file.
+
+## Unattended / scripted use
+
+Everything is scriptable. Dry-run (the safe default) and `--list` make no changes;
+`--commit --yes` runs the whole backup → write → verify with no prompts.
+
+```sh
+sfp-unlock --list                                  # detect (read-only)
+sfp-unlock eth0                                     # dry-run (read-only)
+sfp-unlock eth0 --commit --yes --backup-dir /root  # unattended write + backup
+sfp-unlock eth0 --restore /root/eeprom-eth0-*.bin  # revert from a backup
+```
+
+Exit codes: `0` success or no-op (already unlocked / igb has no lock), `1` error,
+`2` usage, `3` unsupported or unrecognised card. Use these to gate automation.
 
 ## i40e / X710 is not supported on purpose
 
@@ -77,15 +104,21 @@ tool refuses them. If you need it, use the dedicated
 The toolchain is pinned with [mise](https://mise.jdx.dev):
 
 ```sh
-mise install        # shellcheck, shfmt, bats, lefthook
+mise install        # shellcheck, shfmt, bats, lefthook, zizmor
 mise run hooks      # install the git pre-commit hooks (lefthook)
 mise run lint       # shellcheck + shfmt
 mise run test       # bats - no hardware needed
-mise run build      # build the live ISO (needs Docker)
-mise run build-pxe  # build the PXE artefacts (needs Docker)
+mise run zizmor     # security-scan the GitHub Actions workflows
+mise run ci         # lint + test + zizmor
+mise run build      # build the live ISO       (needs Docker)
+mise run build-pxe  # build the PXE artefacts  (needs Docker)
+mise run build-img  # build the mini tools img (needs Docker)
 ```
 
-CI (GitHub Actions) runs lint, tests, the pre-commit hooks, and the ISO build on every push.
+CI (GitHub Actions) runs lint, tests, zizmor, the pre-commit hooks, and the image
+builds on every push, with concurrency cancellation. Pushing a `v*` tag runs the
+release workflow, which builds everything and publishes it to a GitHub release.
+Workflows are SHA-pinned and zizmor-clean.
 
 ## Credits and references
 

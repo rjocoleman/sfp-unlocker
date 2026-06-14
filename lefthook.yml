@@ -13,6 +13,9 @@ pre-commit:
     bats:
       glob: "{bin/sfp-unlock,test/**/*}"
       run: bats test/
+    zizmor:
+      glob: ".github/workflows/*.{yml,yaml}"
+      run: zizmor --offline .github/workflows/
 
 pre-push:
   commands:
