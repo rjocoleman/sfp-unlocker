@@ -19,6 +19,7 @@ to keep it that way, but flashing hardware can always go wrong:
 - You could brick the card. There's a backup and a `--restore`, but no guarantees.
 - It may void your card or server vendor's warranty or support.
 - **No warranty of any kind. You run this entirely at your own risk** (MIT licence).
+- Built for my own use and made public as-is: no support. Use it if it helps you.
 - Not affiliated with or endorsed by Intel. "Intel", "X520", "X540" and "X550" are
   trademarks of Intel Corporation, used here only to say which cards this works on.
 
@@ -61,20 +62,19 @@ ethtool -E enp1s0f0 magic 0x10fb8086 offset 0x58 value 0xfd length 1  # set bit 
 ethtool -e enp1s0f0 offset 0x58 length 1                              # verify, 0xfd
 ```
 
-There are already bash and python scripts floating around that wrap this. I wanted the
-whole feature set in one place, so this does a bit more than three commands - on purpose,
-not overcooked:
+There are already bash and python scripts that wrap these, and for a single X520 this is
+probably overcooked. Look at what it does and decide for yourself before you run it. I
+built it because I wanted the whole feature set in one thing I could boot in my own setups
+without auth:
 
-- works out the `magic` per card (it's `deviceID<<16 | vendorID`, so `0x10fb8086` is the
-  82599 only and wrong on X540/X550)
+- works out the `magic` per card (`deviceID<<16 | vendorID`, so `0x10fb8086` is the 82599
+  only and wrong on X540/X550)
 - checks the card is one it recognises before touching it
 - read-modify-write, so it only flips bit 0 and never clobbers the rest of the byte
 - backs up the EEPROM first, dry-runs by default, and can `--restore`
-- ships as a bootable ISO, a mini mount-and-run image, and PXE for boxes you can't run it
-  on directly
+- bootable ISO, a mini mount-and-run image, and PXE for boxes I can't run it on directly
 
-If you just want the three lines, they're right there. If you want the guard rails and
-the other delivery options, use the tool.
+If you just want the three lines, they're right there.
 
 ## Why it's unlikely to brick your card
 
