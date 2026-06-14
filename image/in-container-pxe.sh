@@ -1,21 +1,30 @@
 #!/bin/sh
 # Runs INSIDE the Alpine container (invoked by build-pxe.sh).
-# Extracts boot files from the ISO and builds the apkovl into OUTDIR.
+# Fetches the official Alpine *netboot* kernel/initramfs/modloop and builds the
+# apkovl into OUTDIR.
+#
+# Important: we use the netboot flavour, not the ISO's files. The ISO initramfs
+# has no network stack, so it can't fetch modloop over the network and just
+# hangs. The netboot initramfs has DHCP + HTTPS (ssl_client + CA certs).
 
 set -eu
 
+ALPINE_VERSION="${ALPINE_VERSION:-3.21}"
 OUTDIR="${OUTDIR:-dist/pxe}"
+BRANCH="v${ALPINE_VERSION}"
+NETBOOT="https://dl-cdn.alpinelinux.org/alpine/${BRANCH}/releases/x86_64/netboot"
 work=/work
 dst="$work/$OUTDIR"
 
-apk add --no-cache xorriso >/dev/null
+apk add --no-cache curl >/dev/null
 
 mkdir -p "$dst"
-echo ">> extracting kernel/initramfs/modloop from ISO"
-xorriso -osirrox on -indev "$work/dist/sfp-unlocker.iso" \
-	-extract /boot/vmlinuz-lts "$dst/vmlinuz-lts" \
-	-extract /boot/initramfs-lts "$dst/initramfs-lts" \
-	-extract /boot/modloop-lts "$dst/modloop-lts"
+echo ">> downloading official Alpine netboot files ($BRANCH)"
+for f in vmlinuz-lts initramfs-lts modloop-lts; do
+	rm -f "$dst/$f" # a stale read-only copy would block curl -o
+	curl -fsSL "$NETBOOT/$f" -o "$dst/$f"
+	echo "   $f"
+done
 
 echo ">> building apkovl"
 SFP_BIN="$work/bin/sfp-unlock" \
@@ -23,4 +32,4 @@ SFP_BIN="$work/bin/sfp-unlock" \
 	sh "$work/image/genapkovl-sfp.sh" sfp-unlocker
 mv sfp-unlocker.apkovl.tar.gz "$dst/"
 
-echo ">> extracted to $OUTDIR"
+echo ">> netboot files ready in $OUTDIR"

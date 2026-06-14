@@ -1,10 +1,11 @@
 #!/bin/sh
-# Produce netboot.xyz/iPXE artefacts from the built ISO.
+# Produce netboot.xyz/iPXE artefacts.
 # Usage: image/build-pxe.sh [OUTDIR]   (default: dist/pxe)
 #
-# Extracts the kernel/initramfs/modloop from dist/sfp-unlocker.iso, builds the
-# matching apkovl, and writes a filled-in sfp.ipxe. Serve OUTDIR over HTTP and
-# point your iPXE/netboot.xyz at sfp.ipxe (edit ${base} to your server URL).
+# Fetches Alpine's official netboot kernel/initramfs/modloop (the netboot
+# initramfs has DHCP + HTTPS; the ISO one does not), builds our apkovl, and
+# writes a filled-in sfp.ipxe. Serve OUTDIR over HTTP/HTTPS, or upload to a
+# release, and point your iPXE/netboot.xyz at sfp.ipxe.
 
 set -eu
 
@@ -14,12 +15,7 @@ TARGET_PLATFORM="${TARGET_PLATFORM:-linux/amd64}"
 
 repo_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 outdir=${1:-dist/pxe}
-iso="$repo_root/dist/sfp-unlocker.iso"
 
-[ -f "$iso" ] || {
-	echo "error: $iso not found - run 'mise run build' first" >&2
-	exit 1
-}
 if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
 	echo "error: docker daemon not reachable - start Docker and retry" >&2
 	exit 1
@@ -29,6 +25,7 @@ mkdir -p "$repo_root/$outdir"
 
 docker run --rm \
 	--platform "$TARGET_PLATFORM" \
+	-e ALPINE_VERSION="$ALPINE_VERSION" \
 	-e OUTDIR="$outdir" \
 	-v "$repo_root":/work \
 	"$ALPINE_IMAGE" /bin/sh -eu /work/image/in-container-pxe.sh
