@@ -1,13 +1,21 @@
 #!ipxe
-# iPXE downloads the self-contained live ISO into RAM and boots it directly.
-# The ISO carries the kernel, modules, ethtool and the tool, so nothing else is
-# fetched at boot. Override ${base} to host the ISO elsewhere.
+# Boot Alpine over the network and apply our overlay. The kernel, initramfs and
+# modloop come straight from the Alpine CDN (the same source netboot.xyz uses);
+# only the small apkovl - which adds ethtool and sfp-unlock - is hosted with the
+# release. Override ${mirror} or ${apkovl} to host them yourself.
 
-set base https://github.com/rjocoleman/sfp-unlocker/releases/latest/download
+set mirror http://dl-cdn.alpinelinux.org/alpine
+set branch v3.21
+set arch x86_64
+set dir ${branch}/releases/${arch}/netboot
+set apkovl https://github.com/rjocoleman/sfp-unlocker/releases/latest/download/sfp-unlocker.apkovl.tar.gz
 set version dev
 
 echo
-echo sfp-unlocker ${version} - RAM-booting ${base}/sfp-unlocker.iso
+echo sfp-unlocker ${version}
 echo
 
-sanboot ${base}/sfp-unlocker.iso
+imgfree
+kernel ${mirror}/${dir}/vmlinuz-lts ip=dhcp edd=off nomodeset console=tty0 console=ttyS0,115200 alpine_repo=${mirror}/${branch}/main modules=loop,squashfs modloop=${mirror}/${dir}/modloop-lts apkovl=${apkovl}
+initrd ${mirror}/${dir}/initramfs-lts
+boot
