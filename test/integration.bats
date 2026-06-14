@@ -10,6 +10,7 @@ setup() {
 	make_stubs "$BATS_TEST_TMPDIR"
 	export SFP_SYSFS_NET="$FAKE_SYS"
 	export SFP_STATE="$BATS_TEST_TMPDIR/eeprom-byte"
+	export SFP_WRITELOG="$BATS_TEST_TMPDIR/writelog"
 	export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
 	export NO_COLOR=1
 	echo fc >"$SFP_STATE" # start locked
@@ -33,6 +34,33 @@ run_tool() { run "$PROG_PATH" "$@"; }
 	[[ "$output" == *"verified"* ]]
 	[ "$(cat "$SFP_STATE")" = "fd" ] # bit 0 now set
 	ls "$BATS_TEST_TMPDIR"/eeprom-eth9-*.bin >/dev/null
+}
+
+@test "the write uses the right offset, magic, value and length" {
+	make_fake_nic "$FAKE_SYS" eth9 0x8086 0x10fb ixgbe
+	run_tool eth9 --commit --yes --backup-dir "$BATS_TEST_TMPDIR"
+	[ "$status" -eq 0 ]
+	line=$(cat "$SFP_WRITELOG")
+	[[ "$line" == *"offset 0x58"* ]]
+	[[ "$line" == *"length 1"* ]]
+	[[ "$line" == *"magic 0x10fb8086"* ]] # deviceID<<16 | vendorID
+	[[ "$line" == *"value 0xfd"* ]]       # fc | 0x01
+}
+
+@test "magic tracks the card model (Dell X520 0x154d)" {
+	make_fake_nic "$FAKE_SYS" eth9 0x8086 0x154d ixgbe
+	run_tool eth9 --commit --yes --backup-dir "$BATS_TEST_TMPDIR"
+	[[ "$(cat "$SFP_WRITELOG")" == *"magic 0x154d8086"* ]]
+}
+
+@test "verify failure is detected and points at the backup" {
+	make_fake_nic "$FAKE_SYS" eth9 0x8086 0x10fb ixgbe
+	export SFP_STUB_IGNORE_WRITE=1
+	run_tool eth9 --commit --yes --backup-dir "$BATS_TEST_TMPDIR"
+	unset SFP_STUB_IGNORE_WRITE
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"verify failed"* ]]
+	[[ "$output" == *"--restore"* ]]
 }
 
 @test "second --commit is idempotent (already unlocked)" {
@@ -104,12 +132,32 @@ run_tool() { run "$PROG_PATH" "$@"; }
 	[[ "$output" == *"0xfc -> 0xfd"* ]]
 }
 
-@test "restore writes a backup file back" {
+@test "restore accepts a backup this tool produced (size + identity match)" {
 	make_fake_nic "$FAKE_SYS" eth9 0x8086 0x10fb ixgbe
-	echo fd >"$SFP_STATE"
-	backup="$BATS_TEST_TMPDIR/restore.bin"
-	make_varied_dump "$backup"
-	run_tool eth9 --restore "$backup" --yes
+	run_tool eth9 --commit --yes --backup-dir "$BATS_TEST_TMPDIR"
+	[ "$status" -eq 0 ]
+	backup=$(ls "$BATS_TEST_TMPDIR"/eeprom-eth9-*.bin | head -1)
+	[ -r "$backup.meta" ] # sidecar written
+	run_tool eth9 --restore "$backup" --yes --backup-dir "$BATS_TEST_TMPDIR"
 	[ "$status" -eq 0 ]
 	[[ "$output" == *restored* ]]
+}
+
+@test "restore refuses a truncated/wrong-size dump" {
+	make_fake_nic "$FAKE_SYS" eth9 0x8086 0x10fb ixgbe
+	short="$BATS_TEST_TMPDIR/short.bin"
+	printf 'abcd' >"$short" # varied but far too short
+	run_tool eth9 --restore "$short" --yes --backup-dir "$BATS_TEST_TMPDIR"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"bytes but"* ]]
+}
+
+@test "restore refuses a dump from a different card (metadata mismatch)" {
+	make_fake_nic "$FAKE_SYS" eth9 0x8086 0x10fb ixgbe
+	foreign="$BATS_TEST_TMPDIR/foreign.bin"
+	make_varied_dump "$foreign"
+	printf 'device=0xbeef\n' >"$foreign.meta"
+	run_tool eth9 --restore "$foreign" --yes --backup-dir "$BATS_TEST_TMPDIR"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"wrong card"* ]]
 }

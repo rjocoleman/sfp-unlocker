@@ -27,8 +27,11 @@ To put it back:
 sfp-unlock enp1s0f0 --restore ./eeprom-enp1s0f0-90-e2-ba-xx-xx-xx-20260614T1030Z.bin
 ```
 
-That validates the file, asks you to confirm, then writes it back via
-`ethtool -E ... magic <derived>`. Cold power-cycle afterwards.
+Before writing, `--restore` checks the dump's sidecar `.meta` came from this card
+(refuses a different device), snapshots the current EEPROM first so the restore is
+itself reversible, and refuses a dump whose size doesn't match the card's EEPROM (so a
+truncated file can't half-overwrite the MAC/config region). Then it asks you to confirm
+and writes it back via `ethtool -E ... magic <derived>`. Cold power-cycle afterwards.
 
 If you'd rather use ethtool directly:
 

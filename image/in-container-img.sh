@@ -42,11 +42,13 @@ Run it on the CURRENTLY RUNNING OS - no reboot:
 
   # Linux (e.g. the Proxmox host): mount this image and run the script
   mount -o loop,ro /path/to/sfp-unlocker-tools.img /mnt   # or the device, e.g. /dev/sdb
-  /mnt/sfp-unlock --list
-  /mnt/sfp-unlock <iface>            # dry-run
-  /mnt/sfp-unlock <iface> --commit   # backup, confirm, write, verify
+  sh /mnt/sfp-unlock --list
+  sh /mnt/sfp-unlock <iface>                       # dry-run
+  sh /mnt/sfp-unlock <iface> --commit --backup-dir /root   # backup, confirm, write, verify
 
-  Backups need a writable location; pass --backup-dir /root (the image is read-only).
+  Invoke via "sh /mnt/sfp-unlock" - FAT carries no execute bit, so the file may
+  not be directly runnable. Backups need a writable location (the image is
+  read-only), so pass --backup-dir to somewhere writable like /root.
 
 The script automatically uses the ethtool sitting next to it, so the host does
 not need ethtool installed. A cold power-cycle is required after a write.

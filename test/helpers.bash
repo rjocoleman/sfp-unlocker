@@ -65,13 +65,17 @@ case "$op" in
 	printf 'Offset\t\tValues\n0x0058:\t\t%s\n' "$b"
 	;;
 -E)
+	# Record the full write request so tests can assert offset/magic/length/value.
+	[ -n "${SFP_WRITELOG:-}" ] && echo "$iface $*" >>"$SFP_WRITELOG"
 	v=
 	while [ $# -gt 0 ]; do
 		[ "$1" = value ] && v=$2
 		shift
 	done
 	v=${v#0x}
-	printf '%s' "$v" >"$state"
+	# SFP_STUB_IGNORE_WRITE=1 simulates a write that didn't take, so the
+	# script's read-back verify fails.
+	[ "${SFP_STUB_IGNORE_WRITE:-0}" = 1 ] || printf '%s' "$v" >"$state"
 	;;
 esac
 STUB

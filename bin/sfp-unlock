@@ -192,12 +192,19 @@ resolve_ethtool() {
 		printf '%s' "$SFP_ETHTOOL"
 		return
 	fi
-	_self_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null && pwd) || _self_dir=
-	if [ -n "$_self_dir" ] && [ -x "$_self_dir/ethtool" ]; then
-		printf '%s' "$_self_dir/ethtool"
-	else
-		printf 'ethtool'
-	fi
+	# Only trust a sibling binary when invoked via an explicit path (contains a
+	# '/'); otherwise a stray ./ethtool in the cwd could be picked up by a root
+	# tool. Installed on PATH, fall straight through to the system ethtool.
+	case "$0" in
+	*/*)
+		_self_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null && pwd) || _self_dir=
+		if [ -n "$_self_dir" ] && [ -x "$_self_dir/ethtool" ]; then
+			printf '%s' "$_self_dir/ethtool"
+			return
+		fi
+		;;
+	esac
+	printf 'ethtool'
 }
 
 read_eeprom_byte() {
@@ -241,15 +248,36 @@ validate_dump() {
 cmd_restore() {
 	_iface=$1
 	_file=$2
+	[ -e "$SYSFS_NET/$_iface" ] || die "no such interface: $_iface"
 	[ -r "$_file" ] || die "restore file not readable: $_file"
 	validate_dump "$_file"
 	_ven=$(iface_attr "$_iface" vendor)
 	_dev=$(iface_attr "$_iface" device)
-	[ -n "$_dev" ] || die "$_iface is not a PCI NIC"
+	[ -n "$_ven" ] && [ -n "$_dev" ] || die "$_iface is not a PCI NIC"
 	_magic=$(compute_magic "$_ven" "$_dev")
-	warn "About to RESTORE $_file to $_iface (magic $_magic). This overwrites the EEPROM."
+
+	# Identity check: if the dump has sidecar metadata, refuse a dump taken from
+	# a different card (restoring another card's MAC/config is a real brick).
+	if [ -r "$_file.meta" ]; then
+		_meta_dev=$(grep '^device=' "$_file.meta" 2>/dev/null | cut -d= -f2)
+		if [ -n "$_meta_dev" ] && [ "$_meta_dev" != "$_dev" ]; then
+			die "refusing: backup is from device $_meta_dev but $_iface is $_dev (wrong card)"
+		fi
+	else
+		warn "no $_file.meta sidecar - cannot confirm this dump came from $_iface"
+	fi
+
+	# Snapshot the current EEPROM first (a bad restore is then itself reversible)
+	# and learn the card's true EEPROM size to reject a truncated/wrong dump.
+	_pre=$(backup_eeprom "$_iface")
+	_live_size=$(wc -c <"$_pre" | tr -d ' ')
+	_file_size=$(wc -c <"$_file" | tr -d ' ')
+	[ "$_file_size" = "$_live_size" ] ||
+		die "refusing: dump is $_file_size bytes but $_iface EEPROM is $_live_size bytes (truncated or wrong card). Current state snapshot: $_pre"
+
+	warn "About to RESTORE $_file ($_file_size bytes) to $_iface (magic $_magic). This overwrites the EEPROM."
 	confirm_or_die
-	"${ETHTOOL:-ethtool}" -E "$_iface" magic "$_magic" <"$_file" || die "restore failed"
+	"${ETHTOOL:-ethtool}" -E "$_iface" magic "$_magic" <"$_file" || die "restore failed (current state saved: $_pre)"
 	ok "restored $_iface from $_file - cold power-cycle the host to apply"
 }
 
@@ -280,7 +308,18 @@ backup_eeprom() {
 	"${ETHTOOL:-ethtool}" -e "$_iface" raw on >"$_out" 2>/dev/null || die "EEPROM backup failed (need root?)"
 	validate_dump "$_out"
 	_sha=$(sha256sum "$_out" 2>/dev/null | cut -d' ' -f1 || echo unavailable)
-	info "backup: $_out"
+	_size=$(wc -c <"$_out" | tr -d ' ')
+	# Sidecar metadata, parsed (never sourced) on restore to confirm the dump
+	# belongs to this card and is the right size.
+	{
+		printf 'iface=%s\n' "$_iface"
+		printf 'vendor=%s\n' "$(iface_attr "$_iface" vendor)"
+		printf 'device=%s\n' "$(iface_attr "$_iface" device)"
+		printf 'mac=%s\n' "$_mac"
+		printf 'size=%s\n' "$_size"
+		printf 'sha256=%s\n' "$_sha"
+	} >"$_out.meta" 2>/dev/null || true
+	info "backup: $_out ($_size bytes)"
 	info "sha256: $_sha"
 	printf '%s' "$_out"
 }
@@ -292,7 +331,7 @@ cmd_unlock() {
 	_drv=$(iface_driver "$_iface")
 	_ven=$(iface_attr "$_iface" vendor)
 	_dev=$(iface_attr "$_iface" device)
-	[ -n "$_dev" ] || die "$_iface has no PCI device info (not a NIC?)"
+	[ -n "$_ven" ] && [ -n "$_dev" ] || die "$_iface has no PCI device info (not a NIC?)"
 
 	_force=''
 	[ "${FORCE_UNKNOWN:-0}" = 1 ] && _force=--force-unknown
@@ -334,11 +373,13 @@ cmd_unlock() {
 	fi
 
 	_backup=$(backup_eeprom "$_iface")
-	# shellcheck disable=SC2064  # expand $_backup now for the trap message
-	trap "err 'failed after backup - restore with: $PROG $_iface --restore $_backup'" EXIT
 
 	warn "About to write $SFP_OFFSET = 0x$_new on $_iface (was 0x$_cur)."
 	confirm_or_die
+
+	# Arm the restore hint only now - once a write may actually have landed.
+	# shellcheck disable=SC2064  # expand $_backup now for the trap message
+	trap "err 'failed mid-write - restore with: $PROG $_iface --restore $_backup'" EXIT
 
 	"${ETHTOOL:-ethtool}" -E "$_iface" magic "$_magic" offset "$SFP_OFFSET" value "0x$_new" length 1 ||
 		die "EEPROM write failed"

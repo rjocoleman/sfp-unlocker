@@ -52,13 +52,14 @@ the running host and mount it:
 Then run it against the live OS:
 
 ```sh
-/mnt/sfp-unlock --list
-/mnt/sfp-unlock <iface>                               # dry-run
-/mnt/sfp-unlock <iface> --commit --backup-dir /root   # image is read-only, write the backup elsewhere
+sh /mnt/sfp-unlock --list
+sh /mnt/sfp-unlock <iface>                               # dry-run
+sh /mnt/sfp-unlock <iface> --commit --backup-dir /root   # image is read-only, write the backup elsewhere
 ```
 
-The script uses the `ethtool` next to it, so the host needs no packages. Cold
-power-cycle after a write. x86_64 only.
+Invoke via `sh /mnt/sfp-unlock` - FAT has no execute bit. The script uses the
+`ethtool` next to it, so the host needs no packages. Cold power-cycle after a
+write. x86_64 only.
 
 ---
 
