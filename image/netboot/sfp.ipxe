@@ -10,8 +10,12 @@
 set base https://github.com/rjocoleman/sfp-unlocker/releases/latest/download
 set branch v3.21
 
-# ip=dhcp is required: the netboot initramfs needs networking up to fetch the
-# modloop and apkovl. console= mirrors output to serial for BMC text consoles.
-kernel ${base}/vmlinuz-lts initrd=initramfs-lts modules=loop,squashfs,sd-mod,usb-storage ip=dhcp edd=off console=tty0 console=ttyS0,115200 alpine_repo=https://dl-cdn.alpinelinux.org/alpine/${branch}/main modloop=${base}/modloop-lts apkovl=${base}/sfp-unlocker.apkovl.tar.gz
+# Mirrors netboot.xyz's known-good Alpine boot. Key point: do NOT put
+# initrd=initramfs-lts on the kernel line - iPXE auto-attaches the single initrd,
+# and the explicit token fails to resolve behind the GitHub release redirect,
+# which leaves the kernel with no initrd ("unable to mount root").
+# Extras over netboot.xyz: ip=dhcp (standalone, no menu framework), edd=off
+# (some servers hang probing EDD), serial console for BMCs, and our apkovl.
+kernel ${base}/vmlinuz-lts ip=dhcp edd=off nomodeset console=tty0 console=ttyS0,115200 alpine_repo=https://dl-cdn.alpinelinux.org/alpine/${branch}/main modules=loop,squashfs modloop=${base}/modloop-lts apkovl=${base}/sfp-unlocker.apkovl.tar.gz
 initrd ${base}/initramfs-lts
 boot
