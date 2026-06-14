@@ -20,6 +20,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4
+        with:
+          version: 2026.6.6 # pin: avoid a broken "latest" with missing release assets
       - run: mise run lint
       - run: mise run test
       - run: mise run zizmor
@@ -36,6 +38,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4
+        with:
+          version: 2026.6.6 # pin: avoid a broken "latest" with missing release assets
       # GitHub runners are x86_64 with Docker available, so the build is native.
       - run: mise run build # live-build: ISO + PXE
       - run: mise run build-img # mini tools image
