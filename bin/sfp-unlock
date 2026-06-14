@@ -82,6 +82,10 @@ unknown silicon, idempotent, reads back to confirm. A cold power-cycle is needed
 for the change to take effect. See docs/runbook.md and docs/recovery.md.
 
 Exit codes: 0 ok/no-op  1 error  2 usage  3 unsupported card
+
+Disclaimer: writes NIC firmware - this can brick the card and may void vendor
+support. No warranty; use entirely at your own risk (MIT). Not affiliated with
+or endorsed by Intel; product names are trademarks of their respective owners.
 EOF
 }
 
@@ -276,6 +280,7 @@ cmd_restore() {
 		die "refusing: dump is $_file_size bytes but $_iface EEPROM is $_live_size bytes (truncated or wrong card). Current state snapshot: $_pre"
 
 	warn "About to RESTORE $_file ($_file_size bytes) to $_iface (magic $_magic). This overwrites the EEPROM."
+	warn "No warranty - at your own risk."
 	confirm_or_die
 	"${ETHTOOL:-ethtool}" -E "$_iface" magic "$_magic" <"$_file" || die "restore failed (current state saved: $_pre)"
 	ok "restored $_iface from $_file - cold power-cycle the host to apply"
@@ -375,6 +380,7 @@ cmd_unlock() {
 	_backup=$(backup_eeprom "$_iface")
 
 	warn "About to write $SFP_OFFSET = 0x$_new on $_iface (was 0x$_cur)."
+	warn "No warranty - this can brick the card and may void vendor support. At your own risk."
 	confirm_or_die
 
 	# Arm the restore hint only now - once a write may actually have landed.

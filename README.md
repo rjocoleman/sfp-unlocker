@@ -11,6 +11,17 @@ It's one POSIX shell script with no dependencies beyond `ethtool`. Run it straig
 on the installed OS (e.g. Proxmox/Debian), or boot the live ISO / PXE image over iLO or
 iDRAC virtual media when you'd rather not touch the host OS.
 
+## Heads up
+
+This writes your NIC's firmware EEPROM. Done right it's low risk, and the tool works hard
+to keep it that way, but flashing hardware can always go wrong:
+
+- You could brick the card. There's a backup and a `--restore`, but no guarantees.
+- It may void your card or server vendor's warranty or support.
+- **No warranty of any kind. You run this entirely at your own risk** (MIT licence).
+- Not affiliated with or endorsed by Intel. "Intel", "X520", "X540" and "X550" are
+  trademarks of Intel Corporation, used here only to say which cards this works on.
+
 ## Is my card supported?
 
 | Driver | Cards | What the tool does |
@@ -39,6 +50,27 @@ cd sfp-unlocker
 
 Then **fully power the host off and on** (a warm reboot is not enough - the driver
 reads the bit at init). Your non-Intel module should now come up.
+
+## Just the ethtool commands
+
+If you have a single X520 and want to do it by hand, this is the whole thing:
+
+```sh
+ethtool -e enp1s0f0 offset 0x58 length 1                              # read, e.g. 0xfc
+ethtool -E enp1s0f0 magic 0x10fb8086 offset 0x58 value 0xfd length 1  # set bit 0
+ethtool -e enp1s0f0 offset 0x58 length 1                              # verify, 0xfd
+```
+
+So why a script? Those three lines have sharp edges the tool files off:
+
+- `0x10fb8086` is the magic for the 82599 **only** - it's `deviceID<<16 | vendorID`, so it's
+  wrong on X540/X550. The tool derives it from sysfs per card.
+- Writing a hardcoded `0xfd` blind-clobbers the other bits in that byte. The tool reads,
+  ORs in bit 0, and writes that (`old | 0x01`).
+- No backup, no card check, no read-back. The tool backs up first, refuses cards it
+  doesn't recognise, and verifies the write.
+
+Same idea, fewer ways to brick a card.
 
 ## Why it's unlikely to brick your card
 
