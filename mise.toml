@@ -52,6 +52,13 @@ depends = ["lint"]
 run = "image/build-pxe.sh dist/pxe"
 sources = ["bin/sfp-unlock", "image/**/*"]
 
+[tasks.build-img]
+description = "Build the mini non-bootable tools image (script + static ethtool, needs Docker)"
+depends = ["lint"]
+run = "image/build-img.sh dist/sfp-unlocker-tools.img"
+sources = ["bin/sfp-unlock", "image/build-img.sh", "image/in-container-img.sh"]
+outputs = ["dist/sfp-unlocker-tools.img"]
+
 [tasks.ci]
 description = "Everything CI runs (lint + test)"
 depends = ["lint", "test"]

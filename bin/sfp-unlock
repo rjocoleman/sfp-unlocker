@@ -185,9 +185,24 @@ list_intel_ifaces() {
 	done
 }
 
+# Pick the ethtool to use: an explicit override, then one sitting next to this
+# script (the self-contained .img ships one), then whatever is on PATH.
+resolve_ethtool() {
+	if [ -n "${SFP_ETHTOOL:-}" ]; then
+		printf '%s' "$SFP_ETHTOOL"
+		return
+	fi
+	_self_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null && pwd) || _self_dir=
+	if [ -n "$_self_dir" ] && [ -x "$_self_dir/ethtool" ]; then
+		printf '%s' "$_self_dir/ethtool"
+	else
+		printf 'ethtool'
+	fi
+}
+
 read_eeprom_byte() {
 	# read_eeprom_byte IFACE OFFSET -> hex byte
-	ethtool -e "$1" offset "$2" length 1 2>/dev/null | parse_byte
+	"${ETHTOOL:-ethtool}" -e "$1" offset "$2" length 1 2>/dev/null | parse_byte
 }
 
 # ---------------------------------------------------------------------------
@@ -234,7 +249,7 @@ cmd_restore() {
 	_magic=$(compute_magic "$_ven" "$_dev")
 	warn "About to RESTORE $_file to $_iface (magic $_magic). This overwrites the EEPROM."
 	confirm_or_die
-	ethtool -E "$_iface" magic "$_magic" <"$_file" || die "restore failed"
+	"${ETHTOOL:-ethtool}" -E "$_iface" magic "$_magic" <"$_file" || die "restore failed"
 	ok "restored $_iface from $_file - cold power-cycle the host to apply"
 }
 
@@ -262,7 +277,7 @@ backup_eeprom() {
 	_mac=$(printf '%s' "$_mac" | tr ':' '-')
 	_stamp=$(date -u +%Y%m%dT%H%M%SZ 2>/dev/null || echo nodate)
 	_out="$_dir/eeprom-$_iface-$_mac-$_stamp.bin"
-	ethtool -e "$_iface" raw on >"$_out" 2>/dev/null || die "EEPROM backup failed (need root?)"
+	"${ETHTOOL:-ethtool}" -e "$_iface" raw on >"$_out" 2>/dev/null || die "EEPROM backup failed (need root?)"
 	validate_dump "$_out"
 	_sha=$(sha256sum "$_out" 2>/dev/null | cut -d' ' -f1 || echo unavailable)
 	info "backup: $_out"
@@ -325,7 +340,7 @@ cmd_unlock() {
 	warn "About to write $SFP_OFFSET = 0x$_new on $_iface (was 0x$_cur)."
 	confirm_or_die
 
-	ethtool -E "$_iface" magic "$_magic" offset "$SFP_OFFSET" value "0x$_new" length 1 ||
+	"${ETHTOOL:-ethtool}" -E "$_iface" magic "$_magic" offset "$SFP_OFFSET" value "0x$_new" length 1 ||
 		die "EEPROM write failed"
 
 	_check=$(read_eeprom_byte "$_iface" "$SFP_OFFSET" || true)
@@ -389,7 +404,8 @@ main() {
 		shift
 	done
 
-	export DO_COMMIT ASSUME_YES FORCE_UNKNOWN BACKUP_DIR
+	ETHTOOL=$(resolve_ethtool)
+	export DO_COMMIT ASSUME_YES FORCE_UNKNOWN BACKUP_DIR ETHTOOL
 
 	if [ "$DO_LIST" = 1 ]; then
 		cmd_list

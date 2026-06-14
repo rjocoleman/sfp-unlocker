@@ -3,9 +3,11 @@
 # build-pxe.sh writes a filled-in copy to dist/pxe/sfp.ipxe; serve that and the
 # vmlinuz-lts / initramfs-lts / modloop-lts / *.apkovl.tar.gz next to it over HTTP.
 #
-# Set ${base} to the directory URL that holds these files.
+# By default this pulls the artefacts straight from the GitHub release (the
+# release workflow uploads vmlinuz-lts/initramfs-lts/modloop-lts/*.apkovl.tar.gz
+# as individual assets). Override ${base} if you host them on your own HTTP server.
 
-set base http://CHANGE-ME/sfp
+set base https://github.com/rjocoleman/sfp-unlocker/releases/latest/download
 set branch v3.21
 
 kernel ${base}/vmlinuz-lts initrd=initramfs-lts modules=loop,squashfs,sd-mod,usb-storage quiet console=tty0 console=ttyS0,115200 alpine_repo=https://dl-cdn.alpinelinux.org/alpine/${branch}/main modloop=${base}/modloop-lts apkovl=${base}/sfp-unlocker.apkovl.tar.gz

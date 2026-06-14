@@ -3,7 +3,7 @@
 # Put this in your netboot.xyz "custom" menu (Menu -> Custom, or a custom.ipxe
 # you host) so it appears alongside the built-in entries.
 
-set sfp_base http://CHANGE-ME/sfp
+set sfp_base https://github.com/rjocoleman/sfp-unlocker/releases/latest/download
 
 :custom_menu_items
 item sfp_unlocker SFP unlocker (Intel ixgbe)

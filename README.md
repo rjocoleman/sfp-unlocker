@@ -8,7 +8,7 @@ flips that bit safely: it backs up first, refuses cards it doesn't know, shows y
 exactly what it will change, and reads back to confirm the write.
 
 It's one POSIX shell script with no dependencies beyond `ethtool`. Run it straight
-on the installed OS (Proxmox/Debian), or boot the live ISO / PXE image over iLO or
+on the installed OS (e.g. Proxmox/Debian), or boot the live ISO / PXE image over iLO or
 iDRAC virtual media when you'd rather not touch the host OS.
 
 ## Is my card supported?

@@ -85,6 +85,25 @@ run_tool() { run "$PROG_PATH" "$@"; }
 	[[ "$output" == *"no such interface"* ]]
 }
 
+@test "prefers a sibling ethtool (self-contained image behaviour)" {
+	tools="$BATS_TEST_TMPDIR/tools"
+	mkdir -p "$tools"
+	cp "$PROG_PATH" "$tools/sfp-unlock"
+	# A sibling ethtool that drops a marker so we can prove it was used in
+	# preference to the one on PATH.
+	{
+		echo '#!/bin/sh'
+		echo "echo used-sibling >'$BATS_TEST_TMPDIR/marker'"
+		echo 'printf "Offset\t\tValues\n0x0058:\t\tfc\n"'
+	} >"$tools/ethtool"
+	chmod +x "$tools/ethtool"
+	make_fake_nic "$FAKE_SYS" eth9 0x8086 0x10fb ixgbe
+	run "$tools/sfp-unlock" eth9
+	[ "$status" -eq 0 ]
+	[ -f "$BATS_TEST_TMPDIR/marker" ]
+	[[ "$output" == *"0xfc -> 0xfd"* ]]
+}
+
 @test "restore writes a backup file back" {
 	make_fake_nic "$FAKE_SYS" eth9 0x8086 0x10fb ixgbe
 	echo fd >"$SFP_STATE"
