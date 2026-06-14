@@ -12,6 +12,6 @@ echo sfp-unlocker ${version} - netboot from ${base}
 echo
 
 imgfree
-kernel ${base}/vmlinuz boot=live components toram ip=dhcp fetch=${base}/filesystem.squashfs console=tty0 console=ttyS0,115200
+kernel ${base}/vmlinuz boot=live components toram ip=dhcp edd=off nomodeset fetch=${base}/filesystem.squashfs console=tty0 console=ttyS0,115200
 initrd ${base}/initrd.img
 boot

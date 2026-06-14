@@ -17,5 +17,5 @@ lb config noauto \
 	--apt-recommends false \
 	--zsync false \
 	--compression xz \
-	--bootappend-live "boot=live components toram console=tty0 console=ttyS0,115200" \
+	--bootappend-live "boot=live components toram edd=off nomodeset console=tty0 console=ttyS0,115200" \
 	"${@}"
