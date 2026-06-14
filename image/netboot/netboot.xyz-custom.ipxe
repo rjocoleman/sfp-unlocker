@@ -1,0 +1,16 @@
+#!ipxe
+# netboot.xyz custom menu entry for the SFP unlocker.
+# Put this in your netboot.xyz "custom" menu (Menu -> Custom, or a custom.ipxe
+# you host) so it appears alongside the built-in entries.
+
+set sfp_base https://github.com/rjocoleman/sfp-unlocker/releases/latest/download
+
+:custom_menu_items
+item sfp_unlocker SFP unlocker (Intel ixgbe)
+
+:sfp_unlocker
+echo Booting SFP unlocker...
+chain ${sfp_base}/sfp.ipxe || goto custom_exit
+
+:custom_exit
+exit 0
