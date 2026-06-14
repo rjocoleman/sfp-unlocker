@@ -11,6 +11,7 @@ set -eu
 ALPINE_VERSION="${ALPINE_VERSION:-3.21}"
 ALPINE_IMAGE="${ALPINE_IMAGE:-alpine:${ALPINE_VERSION}}"
 TARGET_PLATFORM="${TARGET_PLATFORM:-linux/amd64}"
+SFP_VERSION="${SFP_VERSION:-dev}"
 
 repo_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 outdir=${1:-dist/pxe}
@@ -29,8 +30,9 @@ docker run --rm \
 	-v "$repo_root":/work \
 	"$ALPINE_IMAGE" /bin/sh -eu /work/image/in-container-pxe.sh
 
-# Write the iPXE script with the pinned branch substituted in.
-sed "s/^set branch .*/set branch v${ALPINE_VERSION}/" \
+# Write the iPXE script with the pinned branch and version substituted in.
+sed -e "s/^set branch .*/set branch v${ALPINE_VERSION}/" \
+	-e "s/^set version .*/set version ${SFP_VERSION}/" \
 	"$repo_root/image/netboot/sfp.ipxe" >"$repo_root/$outdir/sfp.ipxe"
 cp "$repo_root/image/netboot/netboot.xyz-custom.ipxe" "$repo_root/$outdir/"
 

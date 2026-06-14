@@ -9,6 +9,11 @@
 
 set base https://github.com/rjocoleman/sfp-unlocker/releases/latest/download
 set branch v3.21
+set version dev
+
+echo
+echo sfp-unlocker ${version} - booting from ${base}
+echo
 
 # ip=dhcp brings networking up in the initramfs to fetch the modloop and apkovl.
 # edd=off skips a BIOS disk probe that stalls some servers. console= adds a

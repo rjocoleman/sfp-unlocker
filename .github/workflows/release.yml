@@ -32,6 +32,8 @@ jobs:
 
       - run: mise run build
       - run: mise run build-pxe
+        env:
+          SFP_VERSION: ${{ github.ref_name }}
       - run: mise run build-img
 
       - name: Stage release assets
