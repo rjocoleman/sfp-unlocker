@@ -29,9 +29,9 @@ lb build
 mkdir -p "$work/dist/pxe"
 cp live-image-amd64.hybrid.iso "$work/dist/sfp-unlocker.iso"
 
-# The ISO's binary tree already holds the kernel/initrd/squashfs - reuse them for
-# PXE instead of building a second time.
-cp binary/live/filesystem.squashfs "$work/dist/pxe/filesystem.squashfs"
+# PXE reuses the kernel and initrd from the ISO's binary tree; the rootfs is the
+# ISO itself (iPXE loads it and an init hook loop-mounts it), so the loose
+# squashfs isn't needed.
 cp "$(find binary/live -maxdepth 1 -name 'vmlinuz*' | sort | head -1)" "$work/dist/pxe/vmlinuz"
 cp "$(find binary/live -maxdepth 1 -name 'initrd*' | sort | head -1)" "$work/dist/pxe/initrd.img"
 

@@ -138,17 +138,19 @@ most Linux boxes) it's native and quick.
 ## 7. PXE / netboot.xyz
 
 ```sh
-mise run build          # writes dist/pxe/{vmlinuz,initrd.img,filesystem.squashfs}
+mise run build          # writes dist/sfp-unlocker.iso + dist/pxe/{vmlinuz,initrd.img}
 ```
 
-iPXE loads `vmlinuz` + `initrd.img`; live-boot then pulls `filesystem.squashfs` over HTTP
-into RAM (`toram`) and boots. The generated `sfp.ipxe` defaults `base` to the GitHub
-release download URL
+iPXE loads `vmlinuz`, `initrd.img` and the whole `sfp-unlocker.iso` into RAM; an
+init-premount hook in the initrd loop-mounts the ISO and live-boot runs from it
+(`live-media=/dev/loop0`). Nothing is fetched once the kernel starts and there's no DHCP
+inside Linux, so it doesn't trip over multi-NIC boxes. The generated `sfp.ipxe` defaults
+`base` to the GitHub release download URL
 (`https://github.com/rjocoleman/sfp-unlocker/releases/latest/download`), so once a release
 exists you can point iPXE straight at it.
 
-1. To self-host instead, serve the three files over HTTP and set `base` in `sfp.ipxe` to
-   that URL.
+1. To self-host instead, serve `vmlinuz`, `initrd.img` and `sfp-unlocker.iso` over HTTP and
+   set `base` in `sfp.ipxe` to that URL.
 2. Chain it from iPXE directly, or add the netboot.xyz entry: copy
    `image/netboot/netboot.xyz-custom.ipxe` into your netboot.xyz custom menu (it points
    `sfp_base` at the release by default).

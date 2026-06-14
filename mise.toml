@@ -11,16 +11,16 @@ zizmor = "1.25.2"
 
 [tasks.fmt]
 description = "Format shell scripts in place"
-run = "shfmt -w bin/sfp-unlock test/helpers.bash image/build-img.sh image/in-container-img.sh image/live/build-live.sh image/live/in-container-live.sh image/live/auto/config image/live/config/hooks/normal/0100-root-nopasswd.hook.chroot"
+run = "shfmt -w bin/sfp-unlock test/helpers.bash image/build-img.sh image/in-container-img.sh image/live/build-live.sh image/live/in-container-live.sh image/live/auto/config image/live/config/hooks/normal/0100-root-nopasswd.hook.chroot image/live/config/includes.chroot/etc/initramfs-tools/scripts/init-premount/sfp-loop image/live/config/includes.chroot/etc/initramfs-tools/hooks/sfp-loop"
 
 [tasks.fmt-check]
 description = "Check shell formatting (CI gate)"
-run = "shfmt -d bin/sfp-unlock test/helpers.bash image/build-img.sh image/in-container-img.sh image/live/build-live.sh image/live/in-container-live.sh image/live/auto/config image/live/config/hooks/normal/0100-root-nopasswd.hook.chroot"
+run = "shfmt -d bin/sfp-unlock test/helpers.bash image/build-img.sh image/in-container-img.sh image/live/build-live.sh image/live/in-container-live.sh image/live/auto/config image/live/config/hooks/normal/0100-root-nopasswd.hook.chroot image/live/config/includes.chroot/etc/initramfs-tools/scripts/init-premount/sfp-loop image/live/config/includes.chroot/etc/initramfs-tools/hooks/sfp-loop"
 sources = ["bin/sfp-unlock", "test/helpers.bash", "image/**/*.sh", "image/live/auto/config", "image/live/config/hooks/normal/*.hook.chroot"]
 
 [tasks.shellcheck]
 description = "Static analysis of shell scripts"
-run = "shellcheck -x bin/sfp-unlock test/helpers.bash image/build-img.sh image/in-container-img.sh image/live/build-live.sh image/live/in-container-live.sh image/live/auto/config image/live/config/hooks/normal/0100-root-nopasswd.hook.chroot"
+run = "shellcheck -x bin/sfp-unlock test/helpers.bash image/build-img.sh image/in-container-img.sh image/live/build-live.sh image/live/in-container-live.sh image/live/auto/config image/live/config/hooks/normal/0100-root-nopasswd.hook.chroot image/live/config/includes.chroot/etc/initramfs-tools/scripts/init-premount/sfp-loop image/live/config/includes.chroot/etc/initramfs-tools/hooks/sfp-loop"
 sources = ["bin/sfp-unlock", "test/helpers.bash", "image/**/*.sh", "image/live/auto/config", "image/live/config/hooks/normal/*.hook.chroot"]
 
 [tasks.lint]
@@ -47,7 +47,7 @@ description = "Build the live ISO + PXE artefacts with live-build (needs Docker)
 depends = ["lint"]
 run = "image/live/build-live.sh"
 sources = ["bin/sfp-unlock", "image/live/**/*"]
-outputs = ["dist/sfp-unlocker.iso", "dist/pxe/filesystem.squashfs"]
+outputs = ["dist/sfp-unlocker.iso", "dist/pxe/initrd.img"]
 
 [tasks.build-img]
 description = "Build the mini non-bootable tools image (script + static ethtool, needs Docker)"

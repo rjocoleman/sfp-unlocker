@@ -103,8 +103,9 @@ command. See [docs/recovery.md](docs/recovery.md).
 - **iLO / iDRAC virtual media (bootable):** boot `sfp-unlocker.iso` (a Debian live image,
   BIOS+UEFI). It RAM-boots to a root shell that lists your cards - no login. See
   [docs/runbook.md](docs/runbook.md).
-- **PXE / netboot.xyz:** point iPXE at `sfp.ipxe`; it boots the same image over the network
-  (kernel + initrd, then the squashfs is pulled into RAM). See the runbook.
+- **PXE / netboot.xyz:** point iPXE at `sfp.ipxe`; it loads the kernel, initrd and the ISO
+  into RAM and boots from there - no DHCP or fetch inside Linux, so it's not fussy about
+  multi-NIC boxes. See the runbook.
 - **SystemRescue / any live Linux:** any live Linux with `ethtool` works - copy
   `bin/sfp-unlock` across and run it.
 
@@ -112,8 +113,8 @@ command. See [docs/recovery.md](docs/recovery.md).
 
 Tagged releases publish the artefacts on the
 [releases page](https://github.com/rjocoleman/sfp-unlocker/releases): the bootable
-`sfp-unlocker.iso` (BIOS+UEFI, also USB-writable), the PXE files (`vmlinuz`, `initrd.img`,
-`filesystem.squashfs`) plus `sfp.ipxe`/`netboot.xyz-custom.ipxe`, the mini
+`sfp-unlocker.iso` (BIOS+UEFI, also USB-writable), the PXE files (`vmlinuz`, `initrd.img`)
+plus `sfp.ipxe`/`netboot.xyz-custom.ipxe`, the mini
 `sfp-unlocker-tools.img`, and `SHA256SUMS`. The script itself is just
 [`bin/sfp-unlock`](bin/sfp-unlock) if you only want the one file.
 
@@ -156,7 +157,7 @@ mise run build-img  # build the mini tools img        (needs Docker)
 
 The bootable image is a minimal Debian live system built with
 [live-build](https://live-team.pages.debian.net/live-manual/) - one config produces the
-BIOS+UEFI ISO and the PXE kernel/initrd/squashfs. It RAM-boots (`toram`) and autologins.
+BIOS+UEFI ISO and the PXE kernel/initrd. It runs entirely from RAM and autologins.
 
 CI (GitHub Actions) runs lint, tests, zizmor, the pre-commit hooks, and the image
 builds on every push, with concurrency cancellation. Pushing a `v*` tag runs the

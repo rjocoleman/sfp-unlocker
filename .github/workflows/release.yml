@@ -43,7 +43,9 @@ jobs:
           cp dist/sfp-unlocker.iso release/
           cp dist/sfp-unlocker-tools.img release/
           # PXE files individually so the iPXE releases/latest/download URLs resolve.
-          cp dist/pxe/vmlinuz dist/pxe/initrd.img dist/pxe/filesystem.squashfs release/
+          # The rootfs is the ISO (iPXE loads it; an init hook loop-mounts it),
+          # so only the kernel and initrd are needed alongside it for netboot.
+          cp dist/pxe/vmlinuz dist/pxe/initrd.img release/
           sed "s/^set version .*/set version ${VERSION}/" image/netboot/sfp.ipxe >release/sfp.ipxe
           cp image/netboot/netboot.xyz-custom.ipxe release/
           # Checksums (written to parent first so the file does not list itself).

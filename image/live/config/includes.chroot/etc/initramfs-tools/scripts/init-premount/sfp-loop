@@ -1,0 +1,20 @@
+#!/bin/sh
+# If iPXE loaded our ISO into the initramfs (initrd .../sfp-unlocker.iso
+# /sfp-unlocker.iso), attach it as a loop device before live-boot scans for
+# media. live-boot only looks at block devices, so this lets it find
+# /live/filesystem.squashfs with no networking - the whole rootfs is already in
+# RAM via the initramfs.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "${1:-}" in
+prereqs)
+	prereqs
+	exit 0
+	;;
+esac
+
+for iso in /sfp-unlocker.iso /sfp.iso; do
+	[ -f "$iso" ] || continue
+	modprobe loop 2>/dev/null || true
+	losetup -f "$iso" 2>/dev/null && break
+done

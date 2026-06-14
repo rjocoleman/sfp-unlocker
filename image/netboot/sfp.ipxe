@@ -1,8 +1,11 @@
 #!ipxe
-# Boot the SFP unlocker (Debian live) over the network. iPXE loads the kernel and
-# initrd; live-boot then pulls the squashfs over HTTP into RAM (toram). Everything
-# the tool needs is in the squashfs, so nothing else is fetched and there is no
-# login. Override ${base} to host the files on your own HTTP server.
+# Boot the SFP unlocker (Debian live) over the network with NO in-Linux
+# networking. iPXE loads the kernel, the initrd, and the whole ISO into RAM;
+# an init-premount hook in the initrd loop-mounts the ISO (as /dev/loop0) so
+# live-boot finds the squashfs on it - nothing is fetched once the kernel runs,
+# which sidesteps DHCP/interface/HTTP problems on multi-NIC boxes.
+#
+# Override ${base} to host the files on your own HTTP server.
 
 set base https://github.com/rjocoleman/sfp-unlocker/releases/latest/download
 set version dev
@@ -12,6 +15,7 @@ echo sfp-unlocker ${version} - netboot from ${base}
 echo
 
 imgfree
-kernel ${base}/vmlinuz boot=live components toram ip=dhcp edd=off nomodeset fetch=${base}/filesystem.squashfs console=tty0 console=ttyS0,115200
+kernel ${base}/vmlinuz boot=live components live-media=/dev/loop0 edd=off nomodeset console=tty0 console=ttyS0,115200
 initrd ${base}/initrd.img
+initrd ${base}/sfp-unlocker.iso /sfp-unlocker.iso
 boot
