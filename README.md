@@ -61,16 +61,20 @@ ethtool -E enp1s0f0 magic 0x10fb8086 offset 0x58 value 0xfd length 1  # set bit 
 ethtool -e enp1s0f0 offset 0x58 length 1                              # verify, 0xfd
 ```
 
-So why a script? Those three lines have sharp edges the tool files off:
+There are already bash and python scripts floating around that wrap this. I wanted the
+whole feature set in one place, so this does a bit more than three commands - on purpose,
+not overcooked:
 
-- `0x10fb8086` is the magic for the 82599 **only** - it's `deviceID<<16 | vendorID`, so it's
-  wrong on X540/X550. The tool derives it from sysfs per card.
-- Writing a hardcoded `0xfd` blind-clobbers the other bits in that byte. The tool reads,
-  ORs in bit 0, and writes that (`old | 0x01`).
-- No backup, no card check, no read-back. The tool backs up first, refuses cards it
-  doesn't recognise, and verifies the write.
+- works out the `magic` per card (it's `deviceID<<16 | vendorID`, so `0x10fb8086` is the
+  82599 only and wrong on X540/X550)
+- checks the card is one it recognises before touching it
+- read-modify-write, so it only flips bit 0 and never clobbers the rest of the byte
+- backs up the EEPROM first, dry-runs by default, and can `--restore`
+- ships as a bootable ISO, a mini mount-and-run image, and PXE for boxes you can't run it
+  on directly
 
-Same idea, fewer ways to brick a card.
+If you just want the three lines, they're right there. If you want the guard rails and
+the other delivery options, use the tool.
 
 ## Why it's unlikely to brick your card
 
