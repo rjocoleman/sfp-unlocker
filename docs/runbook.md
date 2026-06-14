@@ -45,21 +45,31 @@ mise run build-img      # writes dist/sfp-unlocker-tools.img (needs Docker)
 It is a small FAT image holding just `sfp-unlock` and a static `ethtool`. Attach it to
 the running host and mount it:
 
-- **iLO/iDRAC:** map `sfp-unlocker-tools.img` as virtual USB/removable media.
-- **Proxmox / any Linux:** `mount -o loop,ro sfp-unlocker-tools.img /mnt` (or the device,
-  e.g. `/dev/sdb`).
+- **iLO / iDRAC virtual media:** map `sfp-unlocker-tools.img` as virtual USB / removable
+  media. On the host it appears as a new block device, not a file - find it with `lsblk`
+  (a ~8M removable disk, e.g. `sdi`) and mount the whole device (there's no partition
+  table):
+
+  ```sh
+  lsblk                       # spot the new ~8M device, e.g. sdi
+  mount -o ro /dev/sdi /mnt
+  ```
+
+- **Proxmox / any Linux, from the image file:** `mount -o loop,ro sfp-unlocker-tools.img /mnt`.
 
 Then run it against the live OS:
 
 ```sh
 sh /mnt/sfp-unlock --list
-sh /mnt/sfp-unlock <iface>                               # dry-run
-sh /mnt/sfp-unlock <iface> --commit --backup-dir /root   # image is read-only, write the backup elsewhere
+sh /mnt/sfp-unlock <iface>            # dry-run
+sh /mnt/sfp-unlock <iface> --commit   # backup auto-lands in /root (mount is read-only)
 ```
 
-Invoke via `sh /mnt/sfp-unlock` - FAT has no execute bit. The script uses the
-`ethtool` next to it, so the host needs no packages. Cold power-cycle after a
-write. x86_64 only.
+The mount is read-only, so the backup can't go next to the image. The tool falls back to
+a writable dir on its own (`/root`, then `/var/tmp`, then `/tmp`) and prints where it
+went; use `--backup-dir DIR` to choose. Invoke via `sh /mnt/sfp-unlock` - FAT has no
+execute bit. The script uses the `ethtool` next to it, so the host needs no packages.
+Cold power-cycle after a write. x86_64 only.
 
 ---
 

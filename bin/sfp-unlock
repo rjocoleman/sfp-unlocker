@@ -293,19 +293,44 @@ confirm_or_die() {
 	[ "$_ans" = yes ] || die "aborted by user"
 }
 
+dir_writable() {
+	# true if we can create (and remove) a file in directory $1
+	[ -d "$1" ] || return 1
+	_wt="$1/.sfp-wtest.$$"
+	if touch "$_wt" 2>/dev/null; then
+		rm -f "$_wt" 2>/dev/null || true
+		return 0
+	fi
+	return 1
+}
+
+pick_backup_dir() {
+	# Choose a writable directory for the backup. Honours --backup-dir; otherwise
+	# falls back so the common case (running from a read-only mounted image) works.
+	if [ -n "${BACKUP_DIR:-}" ]; then
+		mkdir -p "$BACKUP_DIR" 2>/dev/null || true
+		dir_writable "$BACKUP_DIR" || die "backup dir not writable: $BACKUP_DIR"
+		printf '%s' "$BACKUP_DIR"
+		return
+	fi
+	for _c in "$PWD" /root /var/tmp /tmp; do
+		if dir_writable "$_c"; then
+			printf '%s' "$_c"
+			return
+		fi
+	done
+	die "no writable directory for the backup - pass --backup-dir DIR"
+}
+
 backup_eeprom() {
 	# backup_eeprom IFACE -> path written to stdout; logs go to stderr
 	_iface=$1
-	_dir=${BACKUP_DIR:-}
-	if [ -z "$_dir" ]; then
-		if : >./.sfp-write-test 2>/dev/null; then
-			rm -f ./.sfp-write-test
-			_dir=$PWD
-		else
-			_dir=/tmp
-		fi
-	fi
-	mkdir -p "$_dir" 2>/dev/null || true
+	_dir=$(pick_backup_dir)
+	case "$_dir" in
+	/tmp | /tmp/* | /var/tmp | /var/tmp/*)
+		warn "backup dir is $_dir (may not survive a reboot) - copy it somewhere safe, or use --backup-dir"
+		;;
+	esac
 	_mac=$(cat "$SYSFS_NET/$_iface/address" 2>/dev/null || echo unknown)
 	_mac=$(printf '%s' "$_mac" | tr ':' '-')
 	_stamp=$(date -u +%Y%m%dT%H%M%SZ 2>/dev/null || echo nodate)

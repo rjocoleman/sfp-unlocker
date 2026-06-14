@@ -40,20 +40,24 @@ This image holds just two things:
 
 Run it on the CURRENTLY RUNNING OS - no reboot:
 
-  # Linux (e.g. the Proxmox host): mount this image and run the script
-  mount -o loop,ro /path/to/sfp-unlocker-tools.img /mnt   # or the device, e.g. /dev/sdb
-  sh /mnt/sfp-unlock --list
-  sh /mnt/sfp-unlock <iface>                       # dry-run
-  sh /mnt/sfp-unlock <iface> --commit --backup-dir /root   # backup, confirm, write, verify
+  # From the image file (e.g. on the Proxmox host):
+  mount -o loop,ro /path/to/sfp-unlocker-tools.img /mnt
 
-  Invoke via "sh /mnt/sfp-unlock" - FAT carries no execute bit, so the file may
-  not be directly runnable. Backups need a writable location (the image is
-  read-only), so pass --backup-dir to somewhere writable like /root.
+  # Over iLO/iDRAC virtual media it shows up as a block device, not a file:
+  lsblk                          # find the new ~8M removable device, e.g. sdi
+  mount -o ro /dev/sdi /mnt      # whole device - there is no partition table
+
+  sh /mnt/sfp-unlock --list
+  sh /mnt/sfp-unlock <iface>            # dry-run
+  sh /mnt/sfp-unlock <iface> --commit   # backup auto-lands in /root
+
+Invoke via "sh /mnt/sfp-unlock" - FAT carries no execute bit, so the file may
+not be directly runnable. The mount is read-only, so the backup cannot sit next
+to the image; the tool falls back to a writable dir (/root, then /var/tmp, then
+/tmp) and prints where it went. Use --backup-dir DIR to choose.
 
 The script automatically uses the ethtool sitting next to it, so the host does
 not need ethtool installed. A cold power-cycle is required after a write.
-
-Attach via iLO/iDRAC as Virtual USB/removable media, then mount as above.
 x86_64 only. See the project README and docs/ for details.
 EOF
 

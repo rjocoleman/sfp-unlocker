@@ -63,6 +63,35 @@ run_tool() { run "$PROG_PATH" "$@"; }
 	[[ "$output" == *"--restore"* ]]
 }
 
+@test "commit works from a read-only cwd (auto-falls-back, not fatal)" {
+	# Reproduces the dash 'special builtin redirection is fatal' bug on a
+	# read-only mount: with no --backup-dir and a read-only PWD it must fall
+	# back to a writable dir, not abort.
+	make_fake_nic "$FAKE_SYS" eth9 0x8086 0x10fb ixgbe
+	ro="$BATS_TEST_TMPDIR/ro"
+	mkdir -p "$ro"
+	chmod 555 "$ro"
+	cd "$ro"
+	run "$PROG_PATH" eth9 --commit --yes
+	chmod 755 "$ro"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"verified"* ]]
+	bk=$(printf '%s\n' "$output" | sed -n 's/^backup: \(.*\) (.*/\1/p' | head -1)
+	[ -n "$bk" ] && rm -f "$bk" "$bk.meta"
+}
+
+@test "an unwritable --backup-dir is refused" {
+	[ "$(/usr/bin/id -u)" = 0 ] && skip "root bypasses directory permissions"
+	make_fake_nic "$FAKE_SYS" eth9 0x8086 0x10fb ixgbe
+	ro="$BATS_TEST_TMPDIR/robd"
+	mkdir -p "$ro"
+	chmod 555 "$ro"
+	run_tool eth9 --commit --yes --backup-dir "$ro"
+	chmod 755 "$ro"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"not writable"* ]]
+}
+
 @test "second --commit is idempotent (already unlocked)" {
 	make_fake_nic "$FAKE_SYS" eth9 0x8086 0x10fb ixgbe
 	echo fd >"$SFP_STATE"

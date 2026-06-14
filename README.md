@@ -96,8 +96,10 @@ command. See [docs/recovery.md](docs/recovery.md).
 
 - **Mini tools image (no reboot):** `dist/sfp-unlocker-tools.img` is a tiny FAT image
   holding just `sfp-unlock` and a static `ethtool`. Attach it via iLO/iDRAC virtual media
-  (or `mount -o loop` on the host), then run it against the *running* OS - no reboot, and
-  the host needs nothing installed. Build with `mise run build-img`.
+  (it shows up as a block device - `lsblk`, then `mount -o ro /dev/sdX /mnt`), or
+  `mount -o loop` an image file on the host. Run it against the *running* OS - no reboot,
+  nothing to install. The read-only mount is fine: backups auto-fall-back to a writable
+  dir. Build with `mise run build-img`.
 - **iLO / iDRAC virtual media (bootable):** boot the live ISO, it shows your cards and the
   command to type. See [docs/runbook.md](docs/runbook.md).
 - **PXE / netboot.xyz:** `mise run build-pxe` produces kernel + initramfs + apkovl + an
