@@ -12,6 +12,6 @@ set branch v3.21
 
 # ip=dhcp is required: the netboot initramfs needs networking up to fetch the
 # modloop and apkovl. console= mirrors output to serial for BMC text consoles.
-kernel ${base}/vmlinuz-lts initrd=initramfs-lts modules=loop,squashfs,sd-mod,usb-storage ip=dhcp console=tty0 console=ttyS0,115200 alpine_repo=https://dl-cdn.alpinelinux.org/alpine/${branch}/main modloop=${base}/modloop-lts apkovl=${base}/sfp-unlocker.apkovl.tar.gz
+kernel ${base}/vmlinuz-lts initrd=initramfs-lts modules=loop,squashfs,sd-mod,usb-storage ip=dhcp edd=off console=tty0 console=ttyS0,115200 alpine_repo=https://dl-cdn.alpinelinux.org/alpine/${branch}/main modloop=${base}/modloop-lts apkovl=${base}/sfp-unlocker.apkovl.tar.gz
 initrd ${base}/initramfs-lts
 boot
