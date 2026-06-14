@@ -1,0 +1,29 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    ":semanticCommits"
+  ],
+  "packageRules": [
+    {
+      "description": "Group GitHub Actions bumps into a single PR",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions",
+      "commitMessageTopic": "GitHub Actions"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track the mise CLI version pinned for jdx/mise-action",
+      "managerFilePatterns": ["/^\\.github/workflows/.*\\.ya?ml$/"],
+      "matchStrings": [
+        "jdx/mise-action@\\S+[^\\n]*\\n\\s+with:\\n\\s+version:\\s*(?<currentValue>\\S+)"
+      ],
+      "depNameTemplate": "jdx/mise",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    }
+  ]
+}
