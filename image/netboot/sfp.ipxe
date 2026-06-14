@@ -1,24 +1,13 @@
 #!ipxe
-# Boot the SFP unlocker live environment over the network (iPXE).
-# build-pxe.sh writes a filled-in copy to dist/pxe/sfp.ipxe; serve that and the
-# vmlinuz-lts / initramfs-lts / modloop-lts / *.apkovl.tar.gz next to it over HTTP.
-#
-# By default this pulls the artefacts straight from the GitHub release (the
-# release workflow uploads vmlinuz-lts/initramfs-lts/modloop-lts/*.apkovl.tar.gz
-# as individual assets). Override ${base} if you host them on your own HTTP server.
+# iPXE downloads the self-contained live ISO into RAM and boots it directly.
+# The ISO carries the kernel, modules, ethtool and the tool, so nothing else is
+# fetched at boot. Override ${base} to host the ISO elsewhere.
 
 set base https://github.com/rjocoleman/sfp-unlocker/releases/latest/download
-set branch v3.21
 set version dev
 
 echo
-echo sfp-unlocker ${version} - booting from ${base}
+echo sfp-unlocker ${version} - RAM-booting ${base}/sfp-unlocker.iso
 echo
 
-# ip=dhcp brings networking up in the initramfs to fetch the modloop and apkovl.
-# edd=off skips a BIOS disk probe that stalls some servers. console= adds a
-# serial console for BMCs. The initrd is attached by the initrd command below
-# and must not be named on the kernel line.
-kernel ${base}/vmlinuz-lts ip=dhcp edd=off nomodeset console=tty0 console=ttyS0,115200 alpine_repo=https://dl-cdn.alpinelinux.org/alpine/${branch}/main modules=loop,squashfs modloop=${base}/modloop-lts apkovl=${base}/sfp-unlocker.apkovl.tar.gz
-initrd ${base}/initramfs-lts
-boot
+sanboot ${base}/sfp-unlocker.iso
